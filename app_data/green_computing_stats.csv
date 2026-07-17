@@ -1,0 +1,5 @@
+model,test_accuracy,test_macro_f1,train_time_s,inference_ms_per_prediction,model_size_kb
+Logistic Regression,0.72,0.709,0.0196,0.2121,1.2
+Random Forest,0.661,0.656,0.7991,33.506,5589.6
+XGBoost,0.645,0.642,1.6179,1.1661,1221.0
+ANN (MLP),0.624,0.619,0.1134,0.415,34.0

@@ -1,0 +1,31 @@
+{
+  "winner_name": "Logistic Regression",
+  "needs_scaling": true,
+  "feature_columns": [
+    "log_sqft",
+    "NFLOOR",
+    "YRCONC",
+    "WKHRS",
+    "NWKER",
+    "MONUSE",
+    "ht1_bin",
+    "cool_bin",
+    "business_type_Food service",
+    "business_type_Retail other than mall",
+    "business_type_Service",
+    "business_type_Strip shopping center",
+    "REGION_2",
+    "REGION_3",
+    "REGION_4"
+  ],
+  "labels": [
+    "Low",
+    "Medium",
+    "High"
+  ],
+  "tertile_cutoffs": {
+    "q1": 47.08911111111111,
+    "q2": 140.74554529914528
+  },
+  "n_buildings": 741
+}
