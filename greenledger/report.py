@@ -57,6 +57,14 @@ def generate_report(business_type: str, risk_label: str, proba: dict,
             {"role": "user", "content": "\n".join(facts)},
         ],
         temperature=0.4,
-        max_tokens=500,
+        max_completion_tokens=1200,
+        reasoning_effort="low",  # gpt-oss is a reasoning model -- without this, hidden
+        reasoning_format="hidden",  # chain-of-thought tokens can eat the whole budget
     )
-    return resp.choices[0].message.content
+    content = resp.choices[0].message.content
+    if not content:
+        raise RuntimeError(
+            f"Groq returned no content (finish_reason={resp.choices[0].finish_reason!r}). "
+            "Likely the reasoning budget consumed the full token limit."
+        )
+    return content
