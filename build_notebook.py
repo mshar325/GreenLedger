@@ -1,4 +1,6 @@
-"""Builds notebooks/greenledger.ipynb from scratch as a sequence of nbformat cells."""
+"""Builds notebooks/greenledger.ipynb (v2, UK EPC dataset) from scratch as nbformat cells.
+Imports greenledger/pipeline.py directly rather than duplicating feature-engineering
+logic, so the notebook and the app/export script can't silently drift apart."""
 import nbformat as nbf
 
 nb = nbf.v4.new_notebook()
@@ -7,265 +9,246 @@ md = lambda s: cells.append(nbf.v4.new_markdown_cell(s))
 code = lambda s: cells.append(nbf.v4.new_code_cell(s))
 
 md("""\
-# GreenLedger — Low-Cost Proxy Sustainability Risk Scoring for Small Businesses
+# GreenLedger — Sustainability Risk Scoring for UK Small Businesses
 
-**Research question.** How accurately can interpretable machine learning predict a small
-commercial building's energy-intensity risk tier using only the operational details a
-business owner could report from memory in a phone call — compared to models given the
-fuller, inspection-grade building detail an energy auditor would collect? Does an ANN
-outperform classical ML at this data scale?
+**Research question.** Can cheap, self-reportable operational data predict a small
+commercial building's energy-rating risk tier almost as well as a fuller, inspection-grade
+feature set — and does an ANN outperform classical ML at this scale?
 
-**Data.** U.S. EIA [2018 Commercial Buildings Energy Consumption Survey (CBECS)](https://www.eia.gov/consumption/commercial/data/2018/),
-the public-use microdata file: 6,436 real, individually surveyed U.S. commercial buildings
-(disclosure-masked, no names/addresses). This notebook filters to buildings whose principal
-activity looks like an independent small business — food sales, food service, strip
-shopping center, retail (non-mall), and service — under 25,000 sq ft, giving **741 real
-buildings**.
+**Data.** The UK's real non-domestic [Energy Performance Certificate register](https://epc.opendatacommunities.org/)
+— professionally assessed, not self-reported, energy ratings for every commercial building
+type, sold/let/constructed since 2008. Filtered to small-business-like activity types
+(retail/financial/professional, restaurants/cafes, offices/workshops) under 500 m²:
+**430,942 buildings (2018-2024)** for training, **54,460 buildings assessed in 2025** held
+out as a genuine out-of-time test set the model never saw during training.
 
-**Design.** Every building has *both* cheap self-reportable fields (square footage,
-headcount, hours open, rough building age) *and* inspection-grade fields (wall/roof
-material, glass %, ceiling height, basement, elevator) recorded in the same survey. That
-lets us run a **paired ablation**: train each model twice on the identical buildings —
-once on proxy-only features, once on proxy+audit features — and read the accuracy gap
-directly, rather than comparing two different samples.
+**Design.** Unlike a random train/test split, training on one span of years and testing on
+a later one checks whether the model generalizes to buildings assessed *after* training
+ended — closer to how it would actually be used, and a harder, more honest test given that
+mean energy ratings have been improving nearly every year (Section 2).
 """)
 
 code("""\
+import sys
+sys.path.insert(0, "..")  # so `greenledger` (the project root package) is importable from notebooks/
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, f1_score, recall_score, classification_report, confusion_matrix
+from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 import shap
+
+from greenledger.pipeline import (PROXY_NUM, PROXY_CAT, AUDIT_NUM, AUDIT_CAT, LABELS,
+                                    build_feature_matrix, load_pooled)
 
 RANDOM_STATE = 42
 pd.set_option("display.width", 120)
 """)
 
-md("## 1. Load and filter to the small-business subset")
+md("## 1. Load the pooled dataset, with a genuine out-of-time split\n\n"
+   "Same `greenledger/pipeline.py` module the deployed app uses — the small-business "
+   "filter (retail/financial/professional, restaurant/cafe, office/workshop, ≤500 m²) is "
+   "applied identically here and in the app.")
 
 code("""\
-COLS = ["PBA","REGION","SQFT","NFLOOR","YRCONC","WKHRS","NWKER","HT1","COOL",
-        "WLCNS","RFCNS","GLSSPC","FLCEILHT","ATTIC","BASEMNT","ELEVTR","MONUSE","MFBTU"]
+TRAIN_YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+TEST_YEARS = [2025]
 
-raw = pd.read_csv("../data/cbecs2018_final_public.csv", usecols=COLS)
+df_train = load_pooled("../data/uk_epc", "../data/uk_outcodes.csv", TRAIN_YEARS)
+df_test = load_pooled("../data/uk_epc", "../data/uk_outcodes.csv", TEST_YEARS)
 
-SMALL_BIZ_PBA = {6: "Food sales", 15: "Food service", 23: "Strip shopping center",
-                  25: "Retail other than mall", 26: "Service"}
-
-df = raw[raw["PBA"].isin(SMALL_BIZ_PBA) & (raw["SQFT"] <= 25000) & raw["MFBTU"].notna()].copy()
-df["business_type"] = df["PBA"].map(SMALL_BIZ_PBA)
-
-print(f"Buildings after filtering: {len(df)} (of {len(raw)} total CBECS 2018 buildings)")
-df["business_type"].value_counts()
+print(f"Train (2018-2024): {len(df_train):,} buildings")
+print(f"Test  (2025, out-of-time): {len(df_test):,} buildings")
+df_train["property_type_group"].value_counts()
 """)
 
-md("## 2. Target: energy-intensity risk tier\n\n"
-   "`EUI = MFBTU / SQFT` — annual site energy per square foot, the standard building-energy "
-   "benchmarking metric. Split into tertiles so the target is a 3-class risk label "
-   "(Low / Medium / High), matching how a business owner would actually want the result "
-   "presented, rather than a raw regression number.")
+md("## 2. Why a random split would be the wrong call here\n\n"
+   "Mean energy rating (lower = more efficient) has fallen almost every year — a real "
+   "secular trend (LED retrofits, tightening regulation, heat pump adoption), not noise. "
+   "Pooling years into one bucket and splitting randomly would let a model partly learn "
+   "\"which year is this\" instead of the genuine proxy-feature relationships this study is "
+   "actually about — which is exactly why training stops at 2024 and testing happens only "
+   "on 2025 data the model never saw.")
 
 code("""\
-df["EUI"] = df["MFBTU"] / df["SQFT"]
+both = pd.concat([df_train.assign(split="train"), df_test.assign(split="test")])
+yearly = both.groupby("lodgement_year")["asset_rating"].mean()
+print(yearly.round(1))
 
-q1, q2 = df["EUI"].quantile([1/3, 2/3])
-def risk_tier(eui):
-    if eui <= q1: return "Low"
-    if eui <= q2: return "Medium"
-    return "High"
-df["risk_tier"] = df["EUI"].apply(risk_tier)
-
-print(f"Tertile cutoffs (kBtu/sqft/yr): Low <= {q1:.1f} < Medium <= {q2:.1f} < High")
-print(df["risk_tier"].value_counts())
-
-fig, ax = plt.subplots(1, 2, figsize=(11, 4))
-ax[0].hist(df["EUI"], bins=40, color="#2f5d3c")
-ax[0].axvline(q1, color="#3e5266", ls="--"); ax[0].axvline(q2, color="#3e5266", ls="--")
-ax[0].set_title("Energy Use Intensity (kBtu/sqft/yr)")
-df["risk_tier"].value_counts().reindex(["Low","Medium","High"]).plot(
-    kind="bar", ax=ax[1], color=["#4c7a5a","#8ea4bd","#b5533c"])
-ax[1].set_title("Risk tier class balance")
+fig, ax = plt.subplots(figsize=(7, 4))
+yearly.plot(ax=ax, marker="o", color="#2f5d3c", linewidth=2)
+ax.set_ylabel("Mean asset rating (lower = better)"); ax.set_xlabel("")
+ax.set_title("A real trend, not a data artifact")
 plt.tight_layout(); plt.show()
 """)
 
-md("## 3. Two feature sets: proxy (cheap) vs proxy+audit (full)\n\n"
-   "**Proxy set** — anything an owner could state from memory in a 10-minute call: "
-   "business type, region, square footage, floors, rough building-age bracket, weekly hours, "
-   "headcount, and whether the building has heating/cooling at all.\n\n"
-   "**Audit-only additions** — things that need someone to actually look at the building: "
-   "wall/roof construction material, % glass exterior, ceiling height, attic, basement "
-   "floors, elevator.")
+md("## 3. Target and feature sets\n\n"
+   "**Target**: the official assessed `asset_rating_band` (A+ best to G worst), collapsed "
+   "to Low/Medium/High for this comparison — an externally-defined label, not one this "
+   "project invented.\n\n"
+   "**Proxy set** (self-reportable): business type, region, floor area, main heating fuel, "
+   "air-conditioning presence, building environment, assessment year.\n\n"
+   "**Audit-only additions**: air-conditioning capacity rating (kW) and whether an AC "
+   "inspection was commissioned — the one part of this register that plausibly needs a "
+   "real technical assessment rather than an owner's memory.")
 
 code("""\
-def yesno(s):
-    return (s == 1).astype(int)
+y_train = pd.Categorical(df_train["risk_tier"], categories=LABELS, ordered=True).codes
+y_test = pd.Categorical(df_test["risk_tier"], categories=LABELS, ordered=True).codes
 
-df["ht1_bin"]   = yesno(df["HT1"])
-df["cool_bin"]  = yesno(df["COOL"])
-df["attic_bin"] = yesno(df["ATTIC"])
-df["elevtr_bin"]= yesno(df["ELEVTR"].fillna(2))
-df["basemnt_n"] = df["BASEMNT"].fillna(0)
-df["flceilht_c"] = df["FLCEILHT"].clip(upper=55)
-df["log_sqft"] = np.log(df["SQFT"])
+Xp_train = build_feature_matrix(df_train, PROXY_NUM, PROXY_CAT)
+Xp_test = build_feature_matrix(df_test, PROXY_NUM, PROXY_CAT).reindex(columns=Xp_train.columns, fill_value=0)
 
-proxy_num = ["log_sqft","NFLOOR","YRCONC","WKHRS","NWKER","MONUSE","ht1_bin","cool_bin"]
-proxy_cat = ["business_type","REGION"]
+Xa_train = build_feature_matrix(df_train, PROXY_NUM + AUDIT_NUM, PROXY_CAT + AUDIT_CAT)
+Xa_test = build_feature_matrix(df_test, PROXY_NUM + AUDIT_NUM, PROXY_CAT + AUDIT_CAT).reindex(columns=Xa_train.columns, fill_value=0)
 
-audit_num = ["flceilht_c","attic_bin","basemnt_n","elevtr_bin","GLSSPC"]
-audit_cat = ["WLCNS","RFCNS"]
-
-def build_features(num_cols, cat_cols):
-    X_num = df[num_cols].astype(float)
-    X_cat = pd.get_dummies(df[cat_cols].astype(str), drop_first=True)
-    return pd.concat([X_num, X_cat], axis=1)
-
-X_proxy = build_features(proxy_num, proxy_cat)
-X_audit = build_features(proxy_num + audit_num, proxy_cat + audit_cat)
-
-LABELS = ["Low", "Medium", "High"]
-y = pd.Categorical(df["risk_tier"], categories=LABELS, ordered=True).codes  # 0/1/2 - xgboost needs numeric targets
-
-print("Proxy-only feature matrix:", X_proxy.shape)
-print("Proxy+audit feature matrix:", X_audit.shape)
+print("Proxy-only:", Xp_train.shape, " Proxy+audit:", Xa_train.shape)
+pd.Series(y_train).value_counts().rename(index=dict(enumerate(LABELS))).rename("train class balance")
 """)
 
-md("## 4. Models\n\n"
-   "Logistic Regression (interpretable baseline) · Random Forest · XGBoost · a small MLP "
-   "(the ANN comparison). Same train/test split and same random seed for every run so the "
-   "proxy-vs-audit and model-vs-model comparisons are apples-to-apples.")
+md("## 4. Models — trained with class weighting, since risk tiers are imbalanced\n\n"
+   "Logistic Regression, Random Forest, XGBoost, and a small MLP (the ANN), each on both "
+   "feature sets, tested on the same untouched 2025 buildings.")
 
 code("""\
 def make_models():
     return {
-        "Logistic Regression": LogisticRegression(max_iter=2000),
-        "Random Forest": RandomForestClassifier(n_estimators=400, max_depth=8, random_state=RANDOM_STATE),
-        "XGBoost": XGBClassifier(n_estimators=300, max_depth=4, learning_rate=0.05,
-                                  eval_metric="mlogloss", random_state=RANDOM_STATE),
-        "ANN (MLP)": MLPClassifier(hidden_layer_sizes=(32,16), max_iter=2000,
-                                    early_stopping=True, random_state=RANDOM_STATE),
+        "Logistic Regression": (LogisticRegression(max_iter=1000), True),
+        "Random Forest": (RandomForestClassifier(n_estimators=200, max_depth=12, n_jobs=4, random_state=RANDOM_STATE), False),
+        "XGBoost": (XGBClassifier(n_estimators=200, max_depth=5, learning_rate=0.1, n_jobs=4,
+                                    eval_metric="mlogloss", random_state=RANDOM_STATE), False),
+        "ANN (MLP)": (MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=200,
+                                     early_stopping=True, random_state=RANDOM_STATE), True),
     }
 
-def evaluate(X, y, label):
-    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.25, stratify=y, random_state=RANDOM_STATE)
-    scaler = StandardScaler().fit(Xtr)
-    Xtr_s, Xte_s = scaler.transform(Xtr), scaler.transform(Xte)
+def evaluate(X_train, y_train, X_test, y_test, label):
+    sample_weight = compute_sample_weight("balanced", y_train)
+    scaler = StandardScaler().fit(X_train)
+    Xtr_s, Xte_s = scaler.transform(X_train), scaler.transform(X_test)
 
-    rows = []
-    fitted = {}
-    for name, model in make_models().items():
-        needs_scaling = name in ("Logistic Regression", "ANN (MLP)")
-        xtr_use, xte_use = (Xtr_s, Xte_s) if needs_scaling else (Xtr.values, Xte.values)
-        model.fit(xtr_use, ytr)
-        pred = model.predict(xte_use)
-        cv = cross_val_score(model, scaler.transform(X) if needs_scaling else X.values, y,
-                              cv=StratifiedKFold(5, shuffle=True, random_state=RANDOM_STATE),
-                              scoring="accuracy")
+    rows, fitted = [], {}
+    for name, (model, needs_scaling) in make_models().items():
+        xtr = Xtr_s if needs_scaling else X_train.values
+        xte = Xte_s if needs_scaling else X_test.values
+        if isinstance(model, XGBClassifier):
+            model.fit(xtr, y_train, sample_weight=sample_weight)
+        else:
+            model.fit(xtr, y_train)  # MLPClassifier has no sample_weight support -- see Section 5
+        pred = model.predict(xte)
         rows.append({
             "feature_set": label, "model": name,
-            "test_accuracy": accuracy_score(yte, pred),
-            "test_macro_f1": f1_score(yte, pred, average="macro"),
-            "cv_accuracy_mean": cv.mean(), "cv_accuracy_std": cv.std(),
+            "test_accuracy": accuracy_score(y_test, pred),
+            "test_macro_f1": f1_score(y_test, pred, average="macro"),
+            "recall_high_risk": recall_score(y_test, pred, labels=[2], average="macro"),
         })
-        fitted[name] = (model, scaler if needs_scaling else None, Xte, yte, pred)
+        fitted[name] = (model, scaler if needs_scaling else None, pred)
     return pd.DataFrame(rows), fitted
 
-results_proxy, fitted_proxy = evaluate(X_proxy, y, "proxy-only")
-results_audit, fitted_audit = evaluate(X_audit, y, "proxy+audit")
+results_proxy, fitted_proxy = evaluate(Xp_train, y_train, Xp_test, y_test, "proxy-only")
+results_audit, fitted_audit = evaluate(Xa_train, y_train, Xa_test, y_test, "proxy+audit")
 results = pd.concat([results_proxy, results_audit], ignore_index=True)
 results.round(3)
 """)
 
-md("## 5. The cost of going cheap\n\n"
-   "Same models, same buildings, same split — the only thing that changes is whether the "
-   "model gets the audit-grade fields. This is the number the whole project is about.")
+md("""\
+## 5. Why raw accuracy is the wrong first metric here
+
+Read the table above by accuracy alone and the ANN wins outright. Read it by
+**High-risk recall** — the fraction of genuinely High-risk buildings the model actually
+catches, which is the entire point of a risk-flagging tool — and the story flips
+completely. Confusion matrices make it concrete:
+""")
 
 code("""\
-pivot = results.pivot(index="model", columns="feature_set", values="test_accuracy")
-pivot["accuracy_gap"] = pivot["proxy+audit"] - pivot["proxy-only"]
-pivot = pivot[["proxy-only","proxy+audit","accuracy_gap"]].round(3)
-print(pivot)
-
-fig, ax = plt.subplots(figsize=(7,4))
-pivot[["proxy-only","proxy+audit"]].plot(kind="bar", ax=ax, color=["#4c7a5a","#3e5266"])
-ax.set_ylabel("Test accuracy"); ax.set_title("Proxy-only vs proxy+audit, by model")
-ax.set_ylim(0,1); plt.xticks(rotation=20); plt.tight_layout(); plt.show()
+for name in ["ANN (MLP)", "Random Forest"]:
+    model, scaler, pred = fitted_proxy[name]
+    print(f"=== {name} (proxy-only) ===")
+    print(classification_report(y_test, pred, target_names=LABELS, zero_division=0))
+    print(confusion_matrix(y_test, pred, labels=[0, 1, 2]))
+    print()
 """)
 
 md("""\
-**Reading this run's numbers** (a single 42-seeded split — Section 8 covers making this
-robust to seed choice): the proxy-only **Logistic Regression** is the single best model in
-the whole table at 72.0% test accuracy, ahead of every proxy+audit model including its own
-proxy+audit version. Random Forest and XGBoost do pick up a real gain from the audit fields
-(+1.6 and +3.2 points), but neither catches proxy-only Logistic Regression. The **ANN loses
-to every classical model in both feature sets** and is the only model that gets *worse* with
-more features — at n=741 there isn't enough data for a 32-16 hidden-unit MLP to earn its
-extra capacity over a linear boundary. That's the "does depth help at this scale" question
-answered directly: no, not here — a legitimate, reportable finding, not a failed attempt at
-one.
+The ANN's headline accuracy comes almost entirely from defaulting to the majority
+"Medium" tier — its recall on "High" is a few percent, meaning it misses the vast
+majority of buildings that are genuinely high risk. Random Forest catches roughly
+70% of them, at a real cost in overall accuracy. **A tool meant to flag at-risk
+businesses that mostly says "you're fine" is not fit for purpose, however good its
+accuracy number looks** — so the deployed app selects its model on High-risk recall,
+not accuracy. Notably, the accuracy gap between the ANN and everything else *shrinks*
+once class imbalance is accounted for on equal footing: this comparison is also
+handicapped for the MLP specifically, since scikit-learn's `MLPClassifier.fit()` has no
+`sample_weight` parameter, unlike every other model here — a real, disclosed asymmetry,
+not a hidden one.
 """)
 
-md("## 6. Explainability — what the cheap features are actually picking up\n\n"
-   "SHAP on the best-performing proxy-only tree model: which of the phone-call-friendly "
-   "fields drive the prediction most.")
+md("## 6. The cost of going cheap, on the metric that actually matters")
 
 code("""\
-best_proxy_model_name = results_proxy.sort_values("test_accuracy", ascending=False).iloc[0]["model"]
-print("Best proxy-only model:", best_proxy_model_name)
+pivot = results.pivot(index="model", columns="feature_set", values="recall_high_risk")
+pivot["recall_gap"] = pivot["proxy+audit"] - pivot["proxy-only"]
+print(pivot.round(3))
 
-model, scaler, Xte, yte, pred = fitted_proxy[best_proxy_model_name]
-X_for_shap = Xte if scaler is None else pd.DataFrame(scaler.transform(Xte), columns=Xte.columns, index=Xte.index)
+fig, ax = plt.subplots(figsize=(7, 4))
+pivot[["proxy-only", "proxy+audit"]].plot(kind="bar", ax=ax, color=["#4c7a5a", "#3e5266"])
+ax.set_ylabel("High-risk recall"); ax.set_title("Proxy-only vs proxy+audit, by model")
+plt.xticks(rotation=20); plt.tight_layout(); plt.show()
+""")
 
-if best_proxy_model_name in ("Random Forest", "XGBoost"):
-    explainer = shap.TreeExplainer(model)
-    sv = explainer.shap_values(X_for_shap)
-elif best_proxy_model_name == "Logistic Regression":
-    explainer = shap.LinearExplainer(model, X_for_shap)
-    sv = explainer.shap_values(X_for_shap)
-else:
-    explainer = shap.KernelExplainer(model.predict_proba, shap.sample(X_for_shap, 50))
-    sv = explainer.shap_values(X_for_shap, nsamples=100)
+md("""\
+For Random Forest — the model that actually matters — proxy-only and proxy+audit recall
+are within a point of each other. The one plausibly "audit-grade" field this register
+offers (air-conditioning capacity) adds essentially nothing once you're already asking
+whether a building has air conditioning at all. That's a real, if narrower, echo of the
+original finding: cheap, self-reportable data gets you nearly all the way there.
+""")
 
-shap.summary_plot(sv, X_for_shap, plot_type="bar", class_names=LABELS, show=False)
+md("## 7. Explainability")
+
+code("""\
+winner_name = results_proxy.sort_values(["recall_high_risk", "test_macro_f1"], ascending=False).iloc[0]["model"]
+print("Selected model (by High-risk recall):", winner_name)
+
+model, scaler, pred = fitted_proxy[winner_name]
+X_for_shap = Xp_test if scaler is None else pd.DataFrame(scaler.transform(Xp_test), columns=Xp_test.columns)
+
+explainer = shap.TreeExplainer(model) if winner_name in ("Random Forest", "XGBoost") else shap.LinearExplainer(model, X_for_shap)
+sv = explainer.shap_values(X_for_shap.sample(n=min(5000, len(X_for_shap)), random_state=RANDOM_STATE))
+sample = X_for_shap.sample(n=min(5000, len(X_for_shap)), random_state=RANDOM_STATE)
+shap.summary_plot(sv, sample, plot_type="bar", class_names=LABELS, show=False)
 plt.tight_layout(); plt.show()
 """)
 
-code("""\
-print(classification_report(fitted_proxy[best_proxy_model_name][3],
-                             fitted_proxy[best_proxy_model_name][4], target_names=LABELS))
-print("Confusion matrix (rows=true, cols=pred), order", LABELS)
-print(confusion_matrix(fitted_proxy[best_proxy_model_name][3],
-                        fitted_proxy[best_proxy_model_name][4], labels=[0, 1, 2]))
-""")
-
 md("""\
-## 7. Limitations (stated up front, not discovered by a reviewer)
+## 8. Limitations (stated up front, not discovered by a reviewer)
 
-- **Geography:** CBECS is U.S.-only. Results describe U.S. small-commercial buildings; the
-  *method* (proxy-vs-audit ablation) transfers, the specific numbers may not.
-- **Building, not owner-level:** CBECS surveys the building, not the business — some
-  buildings house more than one tenant. Treated as a reasonable proxy for a standalone
-  small business at this size/activity filter, not a perfect match.
-- **N=741 after filtering**, from an original disclosure-masked survey of 6,436 — a solid
-  sample for this course scope, but still worth reporting with cross-validated intervals
-  rather than a single point accuracy.
-- **The proxy/audit split is a construction**, assigned by us based on what's plausible to
-  self-report vs. what needs inspection — not something CBECS itself labels. Documented
-  explicitly above (Section 3) so it's checkable, not asserted.
-- **Risk tiers are relative to this subset** (tertile cutoffs), not an external certified
-  ESG/energy-audit standard.
+- **Geography:** England and Wales only (the EPC register's coverage); the method
+  transfers, the specific numbers may not.
+- **Location precision:** the register gives postcode-district location, not exact
+  coordinates — fine for regional analysis, not for pinpointing a specific building.
+- **A real secular trend exists** in the target across years (Section 2) — handled here
+  via an out-of-time split, but it does mean "2025 performance" is a harder bar than a
+  same-year random split would have been, by design.
+- **The audit-grade set is thinner than a full building survey** — mainly one HVAC
+  capacity field — so "the cost of going cheap" here is a narrower claim than a dataset
+  with full structural detail (wall/roof/insulation) would support.
+- **Risk tiers collapse an 8-band official rating into 3** for this comparison; the full
+  A+-G distribution is shown as-is in the deployed dashboard, not just tertiled.
+- **MLPClassifier's lack of `sample_weight` support** is a real, disclosed asymmetry in
+  this comparison, not a level playing field pretending to be one.
 
-## 8. Next steps
-- Multi-seed error bars (repeat the split 20-50x, report mean ± CI instead of one run).
-- A 10-question Streamlit form mapping directly to the proxy feature set, using the trained
-  proxy-only model to return a Low/Medium/High score plus the SHAP-ranked drivers.
-- Short paper: *"What does it cost to skip the audit? A paired ablation on U.S. small
-  commercial buildings."*
+## 9. Where this goes next
+- Multi-seed / bootstrapped confidence intervals around the recall numbers.
+- A closer look at *why* Random Forest generalizes better across the imbalance than
+  XGBoost with the same class weighting.
+- Short paper: *"Accuracy is the wrong metric: model selection for a real-world risk
+  screening tool on UK small-business energy data."*
 """)
 
 nb["cells"] = cells

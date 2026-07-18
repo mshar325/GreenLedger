@@ -163,19 +163,108 @@ Two findings came out of this without being forced:
    "does model complexity help at this scale" — no — which is a more defensible thing to
    put in a paper than a forced ANN win would have been.
 
-## 7. What isn't done yet
+## 7. What v1 left undone
 
-- Multi-seed error bars (the table above is one 42-seeded split; the notebook's 5-fold CV
-  numbers are close but not identical — repeating across ~20-50 seeds is the next step
-  before any number here goes in a paper).
-- Cloud deployment — the Streamlit app runs locally; hosting it (Streamlit Community Cloud
-  or Render) is the remaining step for the course's Deployment Link requirement.
+- Multi-seed error bars, cloud deployment, Scrum artifacts, the three standalone SDG
+  documents, and the IEEE writeup. Deployment and the dataset itself got addressed next;
+  the rest is still open (Section 10).
+
+## 8. Deployment, an LLM feature, and a dataset upgrade — v1 → v2
+
+**Deployment.** Pushed to a fresh, independent GitHub repo (`mshar325/GreenLedger` — kept
+separate from an unrelated pre-existing repo discovered in the same working directory,
+rather than nesting inside it), deployed on Streamlit Community Cloud, then locked down:
+repo made private, app sharing restricted to specific invited viewers. Confirmed
+Streamlit's GitHub App retains its own access grant independent of the repo's public/
+private toggle — the deployed app kept working after the repo went private, which is
+expected GitHub App behavior, not a leak.
+
+**Optional LLM report generation** (Groq, `openai/gpt-oss-20b`) was added on top of the
+existing structured output — strictly grounded: the model is handed the already-computed
+prediction, SHAP drivers, and cited recommendation text, and instructed to rephrase only,
+never introduce a new number. Hit and fixed one real bug: the first version returned empty
+output because `gpt-oss` is a reasoning model that was spending its entire token budget on
+hidden chain-of-thought before writing any final answer — confirmed via the Groq usage
+dashboard (real token consumption, HTTP 200, empty `content`), fixed with
+`reasoning_effort="low"` and a higher token ceiling, plus a loud error instead of a silent
+blank if it recurs.
+
+**The dataset upgrade.** Asked to reach 30-50k+ rows, which ruled out CBECS entirely (it
+tops out around 6-13k total buildings across every wave EIA has run) and ruled out NYC/
+Chicago's building benchmarking laws just as fast — both exclude small buildings by design
+(NYC's threshold is 25,000+ sq ft, Chicago's 50,000+ sq ft, the exact opposite of this
+project's population). The real candidate was the **UK's non-domestic EPC register**:
+no size threshold, required for every commercial building transaction, and — verified
+directly from the downloaded files, not assumed — comfortably clears the bar with
+**57,000-87,000 small-business-type buildings per year**.
+
+Three things were caught during this migration that would have been easy to miss:
+
+1. **A label change silently broke the first filter.** UK non-domestic property-type
+   labels changed wording in 2023 (dropped the old "A1/A2"/"B1" planning-class prefixes),
+   which made an exact-string filter collapse from ~30,000 matches to ~1,500 for no real
+   reason. Caught by noticing the drop was implausible as a real-world trend, not assumed
+   to be genuine — fixed with a pattern-based filter that matches on substrings instead of
+   an exact list, robust to the wording change either way.
+2. **A real secular trend exists in the data**: mean assessed rating has improved almost
+   every year (2018: 85.6 → 2026: 59.4, lower = better), confirmed against a stable
+   `floor_area` baseline to rule out a units/methodology artifact. This is exactly why
+   training stops at 2024 and testing happens only on 2025 — a genuine out-of-time
+   validation instead of a random split that could let a model quietly learn "which year"
+   instead of the real proxy-feature relationships.
+3. **The ANN's accuracy win was an illusion.** Selecting the "winning" proxy-only model by
+   raw accuracy picked the MLP (68.1%) — until its confusion matrix showed 4.4% recall on
+   the High-risk class: it was winning by defaulting to the majority "Medium" tier, not by
+   being genuinely better. Re-selecting on **High-risk recall** instead picks Random Forest
+   (≈70% recall), which is the actually useful model for a risk-flagging tool. This also
+   surfaced a real, disclosed asymmetry: scikit-learn's `MLPClassifier.fit()` has no
+   `sample_weight` parameter, unlike every other model compared, so the ANN never got the
+   same class-imbalance correction the others did.
+
+The rebuild that followed: `greenledger/pipeline.py` rewritten for the new schema (with a
+lat/long jitter for the map, since the register only gives postcode-district precision,
+not exact coordinates — disclosed in the app rather than presented as more precise than it
+is); `export_artifacts.py` retrained on 430,942 pooled buildings with the corrected
+recall-based selection; the notebook rebuilt to import the same shared pipeline module
+(rather than duplicating logic, as v1's notebook had); `recommendations.py` re-cited to
+Carbon Trust and GOV.UK sources (Carbon Trust lighting guide, GOV.UK's business energy
+efficiency and SME energy efficiency guidance) in place of the original US DOE/EPA
+citations; and a new **Dashboard tab** built on the full pooled dataset — KPI cards, a
+pydeck hexagon-bin map of Great Britain colored by mean rating, rating-band and regional
+breakdowns, and the year-over-year efficiency trend chart, all in the same moss/ledger
+visual language as the rest of the project.
+
+## 9. Results — v2, the real run
+
+| Model | Accuracy | Macro F1 | **High-risk recall** |
+|---|---|---|---|
+| Logistic Regression | 0.413 | 0.234 | 0.049 |
+| Random Forest | 0.529 | 0.480 | **0.699** |
+| XGBoost | 0.547 | 0.493 | 0.584 |
+| ANN (MLP) | **0.681** | 0.491 | 0.044 |
+
+Random Forest is selected — on High-risk recall, not accuracy — but it is also the
+**largest and slowest** model in the comparison (~61 MB, ~59 ms/prediction, versus
+XGBoost's ~1.4 MB and ~1 ms for meaningfully worse recall). Unlike v1, where the winning
+model happened to also be the smallest, here green computing and fitness-for-purpose are
+in real tension, and the app says so rather than forcing the old "no tradeoff" narrative
+onto numbers that don't support it. On the metric that actually matters, the audit-only
+feature (AC capacity rating) barely moves the needle for Random Forest (0.699 → 0.700) —
+a narrower echo of v1's "cheap data gets you most of the way there," on a thinner
+audit-grade feature set than CBECS offered.
+
+## 10. What isn't done yet
+
+- Multi-seed / bootstrapped confidence intervals around the recall numbers.
+- Redeploying v2 to Streamlit Cloud (v1 was deployed; this dataset/model swap needs the
+  same push + redeploy cycle).
 - Scrum artifacts (product backlog, sprint backlog) and the standalone SDG Mapping / User
   Manual / Sustainability Impact Report documents the rubric requires separately from the
   technical work.
-- The IEEE-format writeup itself.
+- The IEEE-format writeup — now with a stronger angle (accuracy vs. recall as the central
+  methodological argument) than v1 had.
 
-## 8. Where everything lives
+## 11. Where everything lives
 
 ```
 GreenLedger/

@@ -1,31 +1,59 @@
 {
-  "winner_name": "Logistic Regression",
-  "needs_scaling": true,
+  "winner_name": "Random Forest",
+  "needs_scaling": false,
   "feature_columns": [
-    "log_sqft",
-    "NFLOOR",
-    "YRCONC",
-    "WKHRS",
-    "NWKER",
-    "MONUSE",
-    "ht1_bin",
-    "cool_bin",
-    "business_type_Food service",
-    "business_type_Retail other than mall",
-    "business_type_Service",
-    "business_type_Strip shopping center",
-    "REGION_2",
-    "REGION_3",
-    "REGION_4"
+    "log_floor_area",
+    "lodgement_year",
+    "property_type_group_Restaurant/Cafe",
+    "property_type_group_Retail/Financial/Professional",
+    "main_heating_fuel_Biogas",
+    "main_heating_fuel_Biomass",
+    "main_heating_fuel_Coal",
+    "main_heating_fuel_District Heating",
+    "main_heating_fuel_Dual Fuel Appliances (Mineral + Wood)",
+    "main_heating_fuel_Grid Displaced Electricity",
+    "main_heating_fuel_Grid Supplied Electricity",
+    "main_heating_fuel_LPG",
+    "main_heating_fuel_Natural Gas",
+    "main_heating_fuel_Oil",
+    "main_heating_fuel_Other",
+    "main_heating_fuel_Smokeless Fuel (inc Coke)",
+    "main_heating_fuel_Waste Heat",
+    "aircon_present_Yes",
+    "building_environment_Heating and Mechanical Ventilation",
+    "building_environment_Heating and Natural Ventilation",
+    "building_environment_Mixed-mode with Mechanical Ventilation",
+    "building_environment_Mixed-mode with Natural Ventilation",
+    "building_environment_Unconditioned",
+    "uk_region_East of England",
+    "uk_region_London",
+    "uk_region_North East England",
+    "uk_region_North West England",
+    "uk_region_Scotland",
+    "uk_region_South East England",
+    "uk_region_South West England",
+    "uk_region_Unknown",
+    "uk_region_Wales",
+    "uk_region_West Midlands",
+    "uk_region_Yorkshire and the Humber"
   ],
   "labels": [
     "Low",
     "Medium",
     "High"
   ],
-  "tertile_cutoffs": {
-    "q1": 47.08911111111111,
-    "q2": 140.74554529914528
-  },
-  "n_buildings": 741
+  "train_years": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "test_years": [
+    2025
+  ],
+  "n_train": 430942,
+  "n_test": 54460
 }
