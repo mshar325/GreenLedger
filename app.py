@@ -428,15 +428,18 @@ with tab_dash:
     hour = pd.Timestamp.now().hour
     daypart = "morning" if hour < 12 else ("afternoon" if hour < 18 else "evening")
 
+    n_regions = dash[~dash["uk_region"].isin(["Unknown", "Scotland"])]["uk_region"].nunique()
     hero_col, filt_col = st.columns([3.2, 1])
     with hero_col:
         st.markdown(f"""
 <div class="hero-card">
   <p class="hero-title">Overview</p>
-  <p class="hero-sub">Good {daypart}, <b>GreenLedger</b>
-     <span class="chip">Register Window</span>
-     {dash['lodgement_year'].min()} → {dash['lodgement_year'].max()} ·
-     England &amp; Wales non-domestic EPC register</p>
+  <p class="hero-sub">Good {daypart} — here's the current state of the England &amp; Wales
+     non-domestic EPC register for small businesses.</p>
+  <p class="hero-sub" style="margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:0.85rem;">
+     <b>{len(dash):,}</b> certificates&ensp;·&ensp;<b>{n_regions}</b> regions&ensp;·&ensp;
+     <b>{dash['lodgement_year'].min()} → {dash['lodgement_year'].max()}</b>
+     <span class="chip" style="margin-left:14px;">≤ 500 m² small businesses</span></p>
 </div>""", unsafe_allow_html=True)
     with filt_col:
         yr_filter = st.radio("Period", ["All years", "Since 2022", "2025 only"],
