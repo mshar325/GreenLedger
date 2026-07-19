@@ -1,0 +1,8 @@
+,fast (<=90d),slow (>90d),all escapes
+n,2535.0,35232.0,37767.0
+fuel_changed_%,29.2,23.8,24.1
+env_changed_%,20.2,24.1,23.9
+aircon_changed_%,11.2,18.3,17.8
+floor_area_changed>5%_%,43.6,60.6,59.5
+nothing_observable_%,39.7,23.9,24.9
+land_just_E_121_125_%,11.4,5.3,5.7

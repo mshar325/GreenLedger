@@ -1,9 +1,9 @@
 feature_set,model,test_accuracy,test_macro_f1,recall_high_risk,train_time_s,inference_ms_per_prediction,model_size_kb
-proxy-only,Logistic Regression,0.413,0.234,0.049,2.76,0.1523,1.6
-proxy-only,Random Forest,0.529,0.48,0.699,40.27,59.1877,60983.3
-proxy-only,XGBoost,0.547,0.493,0.584,28.19,1.0145,1444.2
-proxy-only,ANN (MLP),0.681,0.491,0.044,42.62,0.2402,111.8
-proxy+audit,Logistic Regression,0.414,0.236,0.05,3.58,0.1486,1.8
-proxy+audit,Random Forest,0.519,0.468,0.7,41.46,48.3005,57719.7
-proxy+audit,XGBoost,0.541,0.487,0.591,26.21,1.0195,1437.3
-proxy+audit,ANN (MLP),0.679,0.488,0.044,49.6,0.4083,120.8
+proxy-only,Logistic Regression,0.413,0.234,0.049,2.61,0.1375,1.6
+proxy-only,Random Forest,0.529,0.48,0.699,32.29,47.4934,60983.3
+proxy-only,XGBoost,0.547,0.493,0.584,22.01,0.7263,1444.2
+proxy-only,ANN (MLP),0.681,0.491,0.044,39.27,0.2901,111.8
+proxy+audit,Logistic Regression,0.414,0.236,0.05,3.13,0.1243,1.8
+proxy+audit,Random Forest,0.519,0.468,0.7,36.96,55.9883,57719.7
+proxy+audit,XGBoost,0.541,0.487,0.591,23.6,1.2107,1437.3
+proxy+audit,ANN (MLP),0.679,0.488,0.044,56.47,0.2187,120.8

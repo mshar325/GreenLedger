@@ -1,0 +1,11 @@
+,count
+Grid Supplied Electricity -> Natural Gas,2878
+Natural Gas -> Grid Supplied Electricity,2748
+Grid Supplied Electricity -> Other,1289
+Oil -> Grid Supplied Electricity,725
+Natural Gas -> Other,256
+Other -> Grid Supplied Electricity,216
+Oil -> Natural Gas,208
+Grid Supplied Electricity -> Oil,109
+Oil -> Other,82
+Grid Supplied Electricity -> LPG,78

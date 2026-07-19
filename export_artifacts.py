@@ -145,11 +145,30 @@ background.to_csv(APP_DATA_DIR / "shap_background.csv", index=False)
 # TEST year -- what a new input gets percentile-ranked against.
 X_test_use = winner_scaler.transform(Xp_test) if winner_scaler is not None else Xp_test.values
 high_idx = list(winner_model.classes_).index(2)
-scores = winner_model.predict_proba(X_test_use)[:, high_idx]
+proba_test = winner_model.predict_proba(X_test_use)
+scores = proba_test[:, high_idx]
 pd.DataFrame({
     "property_type_group": df_test_raw["property_type_group"].values,
     "high_risk_score": scores,
 }).to_csv(APP_DATA_DIR / "risk_score_distribution.csv", index=False)
+
+# Audit-triage export: per-building predictions + uncertainty on the 2025 out-of-time
+# set, so the app can rank an audit queue by model uncertainty (predictive entropy).
+with np.errstate(divide="ignore", invalid="ignore"):
+    entropy = -np.nansum(proba_test * np.log(np.clip(proba_test, 1e-12, 1)), axis=1)
+triage = pd.DataFrame({
+    "property_type_group": df_test_raw["property_type_group"].values,
+    "uk_region": df_test_raw["uk_region"].values,
+    "local_authority": df_test_raw["local_authority_label"].values,
+    "floor_area_m2": df_test_raw["floor_area"].values,
+    "main_heating_fuel": df_test_raw["main_heating_fuel"].values,
+    "predicted_tier": [LABELS[i] for i in np.argmax(proba_test, axis=1)],
+    "p_low": proba_test[:, 0].round(3), "p_medium": proba_test[:, 1].round(3),
+    "p_high": proba_test[:, 2].round(3),
+    "uncertainty_entropy": entropy.round(4),
+    "actual_tier": df_test_raw["risk_tier"].values,  # known here; unknown at audit time in deployment
+})
+triage.to_csv(APP_DATA_DIR / "triage_2025.csv.gz", index=False, compression="gzip")
 
 # Dashboard data: full pooled (train+test) dataset, trimmed to what the dashboard needs.
 # lat/long are only known at postcode-outcode (district) precision, so many buildings

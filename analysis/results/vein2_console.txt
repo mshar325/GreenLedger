@@ -1,0 +1,68 @@
+Loading all years...
+  1,176,148 certificates with a UPRN
+  867,996 unique buildings; 212,908 with 2+ certs; 44,338 with 3+
+  250,659 consecutive same-building certificate pairs
+  40,369 pairs where the previous certificate was F/G; 93.6% escape to E-or-better overall
+
+Escape rate by year:
+year
+2012    56.0
+2013    65.3
+2014    66.8
+2015    73.6
+2016    80.9
+2017    87.9
+2018    96.4
+2019    97.0
+2020    97.6
+2021    97.2
+2022    98.2
+2023    99.2
+2024    98.2
+2025    98.0
+2026    97.8
+Name: escape_rate, dtype: float64
+
+Of 37,767 escapes: 5.7% land at 121-125 ('just barely E'); 75.4% reach D or better (<=100)
+Baseline: 2.6% of all E-or-better certificates sit at 121-125
+
+Gap days (escape vs non-escape re-certifications):
+       escape_pairs  non_escape_pairs
+count       37767.0            2602.0
+mean         2053.0             783.0
+std          1323.0            1021.0
+min             1.0               1.0
+10%           194.0               2.0
+25%           930.0              28.0
+50%          2044.0             354.0
+75%          3115.0            1168.0
+90%          3855.0            2206.0
+max          5256.0            5109.0
+  <=30 days: escapes 3.9%  vs non-escapes 25.6%
+  <=90 days: escapes 6.7%  vs non-escapes 35.7%
+  <=1 year: escapes 14.2%  vs non-escapes 50.5%
+
+What changed across F/G -> E-or-better escapes:
+                         fast (<=90d)  slow (>90d)  all escapes
+n                              2535.0      35232.0      37767.0
+fuel_changed_%                   29.2         23.8         24.1
+env_changed_%                    20.2         24.1         23.9
+aircon_changed_%                 11.2         18.3         17.8
+floor_area_changed>5%_%          43.6         60.6         59.5
+nothing_observable_%             39.7         23.9         24.9
+land_just_E_121_125_%            11.4          5.3          5.7
+
+Top fuel switches among escapes:
+Grid Supplied Electricity -> Natural Gas    2878
+Natural Gas -> Grid Supplied Electricity    2748
+Grid Supplied Electricity -> Other          1289
+Oil -> Grid Supplied Electricity             725
+Natural Gas -> Other                         256
+Other -> Grid Supplied Electricity           216
+Oil -> Natural Gas                           208
+Grid Supplied Electricity -> Oil             109
+Oil -> Other                                  82
+Grid Supplied Electricity -> LPG              78
+Name: count, dtype: int64
+
+Saved CSVs + 2 figures to C:\Users\mihir sharma\GreenLedger\analysis\results
