@@ -502,16 +502,22 @@ with tab_dash:
         geojson, centroids = load_region_geo()
         reg_stats = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown"])].groupby(
             "uk_region").agg(n=("asset_rating", "size"), mean_rating=("asset_rating", "mean")).reset_index()
+        # z is pre-normalized to 0-1 against the regional min/max and the scale is
+        # pinned to the SAME six stops as the .heat-bar legend gradient, so the map
+        # and the legend cannot drift apart (they did when plotly auto-normalized).
+        HEAT_STOPS = [[0.0, "#39ff8c"], [0.2, "#b8e994"], [0.4, "#e8d371"],
+                       [0.6, "#e0703f"], [0.8, "#ff4d6d"], [1.0, "#c23fd6"]]
+        rmin, rmax = reg_stats["mean_rating"].min(), reg_stats["mean_rating"].max()
+        reg_stats["z_norm"] = (reg_stats["mean_rating"] - rmin) / max(rmax - rmin, 1e-9)
         figm = go.Figure(go.Choropleth(
             geojson=geojson, locations=reg_stats["uk_region"], featureidkey="properties.region",
-            z=reg_stats["mean_rating"],
-            colorscale=[[0.0, "#39ff8c"], [0.25, "#b8e994"], [0.5, "#e8d371"],
-                         [0.75, "#e0703f"], [1.0, "#c23fd6"]],
+            z=reg_stats["z_norm"], zmin=0.0, zmax=1.0,
+            colorscale=HEAT_STOPS,
             marker_line_color="#0a0f0d", marker_line_width=1.4,
             showscale=False,
-            customdata=reg_stats[["n"]],
+            customdata=reg_stats[["n", "mean_rating"]],
             hovertemplate="<b>%{location}</b><br>%{customdata[0]:,} buildings<br>"
-                           "mean rating %{z:.0f}<extra></extra>",
+                           "mean rating %{customdata[1]:.0f}<extra></extra>",
         ))
         lab = centroids.merge(reg_stats, left_on="region", right_on="uk_region")
         figm.add_trace(go.Scattergeo(
@@ -524,12 +530,13 @@ with tab_dash:
         figm.update_layout(**PLOTLY_DARK_LAYOUT, height=460,
                             margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
         st.plotly_chart(figm, use_container_width=True)
-        st.markdown("""
+        st.markdown(f"""
 <div class="heat-scale">
   <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:0.08em;
        text-transform:uppercase;color:#aab8b0;margin-bottom:6px;">Heat scale · mean asset rating</div>
   <div class="heat-bar"></div>
-  <div class="heat-lbl"><b style="color:#39ff8c;">Efficient</b><b style="color:#c23fd6;">Poor</b></div>
+  <div class="heat-lbl"><b style="color:#39ff8c;">Efficient · {rmin:.0f}</b>
+      <b style="color:#c23fd6;">Poor · {rmax:.0f}</b></div>
 </div>""", unsafe_allow_html=True)
     with rcol:
         st.markdown('<div class="panel-sub" style="font-family:\'IBM Plex Mono\',monospace;'
