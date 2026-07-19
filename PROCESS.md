@@ -1,8 +1,11 @@
 # GreenLedger — Process & Results
 
 A record of how this project went from a generic AI-business-dashboard brainstorm to a
-working, executed notebook on real government data — what was rejected and why, what was
-actually built, and what it found.
+deployed 5-tab research platform on real UK government data — with two executed empirical
+studies of regulatory manipulation on top of the predictive model. What was rejected and
+why, what was actually built, what it found, and every bug caught along the way. Sections
+1-9 cover the original CBECS-based build (v1); 10 onward cover deployment, the UK-register
+migration, the research escalation (Veins 1-2), and the v3 platform.
 
 ---
 
@@ -253,31 +256,159 @@ feature (AC capacity rating) barely moves the needle for Random Forest (0.699 �
 a narrower echo of v1's "cheap data gets you most of the way there," on a thinner
 audit-grade feature set than CBECS offered.
 
-## 10. What isn't done yet
+## 10. Deployment, hardening, and a caught prediction bug
 
-- Multi-seed / bootstrapped confidence intervals around the recall numbers.
-- Redeploying v2 to Streamlit Cloud (v1 was deployed; this dataset/model swap needs the
-  same push + redeploy cycle).
-- Scrum artifacts (product backlog, sprint backlog) and the standalone SDG Mapping / User
-  Manual / Sustainability Impact Report documents the rubric requires separately from the
-  technical work.
-- The IEEE-format writeup — now with a stronger angle (accuracy vs. recall as the central
-  methodological argument) than v1 had.
+- **Deployed** to Streamlit Community Cloud from a fresh independent GitHub repo
+  (`mshar325/GreenLedger`), kept separate from an unrelated pre-existing repo found in the
+  same working directory. Repo visibility was toggled private → public more than once while
+  wiring up Streamlit's GitHub App access; confirmed the App keeps a standing access grant
+  independent of the repo's public/private flag.
+- **Two deploy-time bugs caught and fixed:** `plotly` and `pydeck` were installed locally
+  but never pinned in `requirements.txt`, so the first cloud build crashed with
+  `ModuleNotFoundError: plotly`; cross-checked every import against `requirements.txt` before
+  re-pushing. Separately, an **optional LLM report** (Groq `openai/gpt-oss-20b`) returned
+  empty output because gpt-oss is a reasoning model whose hidden chain-of-thought consumed
+  the whole token budget — confirmed via the Groq usage dashboard (real tokens, HTTP 200,
+  empty content) and fixed with `reasoning_effort="low"` + a higher ceiling, and later made
+  fully opt-in behind a "Generate written report" button.
 
-## 11. Where everything lives
+## 11. Research escalation — the "doctorate-level" turn
+
+Asked to push GreenLedger toward research depth, the project grew a research arm
+(`analysis/`) with the same verify-don't-assume discipline used everywhere else. Three
+"veins" were mapped in `RESEARCH_ROADMAP.md`; two were executed.
+
+### Vein 1 — MEES threshold bunching (executed; the flagship finding)
+
+**The idea.** UK MEES regulations make it unlawful to let a commercial building rated F/G
+(asset rating ≥126) — new lets from April 2018, all lets from April 2023. That is a
+*notch*: owners have a large incentive for a building to score just inside E (≤125) rather
+than just inside F. Do certificates pile up suspiciously at that boundary?
+
+**Related work, verified (`analysis/RELATED_WORK_VEIN1.md`).** A citation supplied to us —
+"McCrone et al., 2018" — **could not be verified and appears not to exist**; the real
+residential anchor is Collins & Curtis (2018, *Applied Energy*, Irish domestic EPCs). Plus
+Hardy & Glew (2019) and Crawley et al. (2019) on E&W domestic EPC error rates, and the
+bunching-methodology canon (McCrary 2008; Chetty et al. 2011; Kleven & Waseem 2013). The
+gap: no counterfactual-density bunching study surfaced for the E&W **non-domestic**
+register tied to the MEES letting ban.
+
+**Method (`analysis/vein1_bunching.py`).** Chetty-style estimator: binned certificate
+counts, degree-4 polynomial in centered rating, excluded window [121,130], heaping dummies
+(multiples of 5/10), counterfactual = polynomial + heaping, excess mass B (121-125),
+missing mass M (126-130), normalized b = B / mean counterfactual, 500-rep residual
+bootstrap CIs. Run on all 15 years (2012-2026) × full/small-biz × the MEES boundary plus
+two placebo boundaries (C/D at 75, B/C at 50).
+
+**Result — a clean natural experiment.** Normalized excess mass b at the E/F boundary:
+**~0.02 in 2012 (pre-policy)**, rising through the 2015-2017 anticipation window, and
+**plateauing at ~3-3.9 from 2018 enforcement onward** — while placebo boundaries hug zero
+until ~2022, then drift up (consistent with anticipation of the announced future C/B
+minimum standards). M/B ≈ 0.7-0.9: the excess mass at just-E is drawn from just-F — the
+Kleven-Waseem notch relabeling signature. `analysis/PAPER_BLUEPRINT_VEIN1.md` maps an
+IEEE paper onto these exhibits.
+
+### Vein 2 — the repeat-certificate mechanism test (executed)
+
+**The idea (`analysis/vein2_panel.py`, `MECHANISM_VEIN2.md`).** Certificates carry a
+building id (`uprn`), so the same building's certificate history can be tracked. Panel:
+**1.18M certificates, 867,996 buildings, 250,659 consecutive same-building pairs**, of
+which 40,369 had a failing (F/G) previous certificate.
+
+**Findings.** (1) Escape rate (F/G → E-or-better on re-certification) tracks the policy
+exactly: **56% (2012) → 96-99% every year since 2018.** (2) Most escapes look genuine —
+**75% land at D or better** — but escapes are **~2.2× over-represented at "just barely E"**
+(121-125) vs baseline. (3) The speed test *inverted* the assessor-shopping prior: escapes
+are slow (median ~5.6 years); fast re-certifications mostly fail again. But the small
+**fast-escape segment (≤90 days)** carries the manipulation signature — 40% show no
+observable input change and land at just-barely-E at ~4.4× baseline. (4) The dominant
+observable channel is a **>5% change in assessed floor area (59.5% of escapes)** — a lever
+requiring no physical work, and the specific audit-worthy margin. Honest caveats: escape
+rates are conditional on choosing to re-certify (selection), and fabric changes (glazing,
+insulation) are invisible in this register, so "nothing changed" is an upper bound on
+gaming, not a measurement of it.
+
+## 12. The app as a research platform (v3) + dashboard redesign
+
+The Streamlit app was rebuilt from a 3-tab demo into a 5-tab platform:
+
+- **Risk Assessment** — questionnaire, SHAP explanation, peer benchmarking, cited
+  recommendations, a **"Pathway to E" retrofit simulator** (change fuel/environment/AC and
+  the model re-scores live, with an "association not guarantee" disclaimer), and an
+  **opt-in** AI report (generated only on button click, not automatically).
+- **Dashboard** — redesigned to match a reference design language the user supplied: a hero
+  overview card, four custom HTML KPI cards with per-card accent colors and real inline-SVG
+  sparklines, and a **region choropleth** (real ONS England-&-Wales boundaries, simplified
+  4.2MB→459KB, no external map tiles) sitting beside a "Region rankings" panel. A single
+  shared `heat_color()` interpolator drives the map fills, the legend strip, **and** the
+  ranking bars so no panel can drift onto its own palette — fixed after two rounds where the
+  map read all-pink (a Scotland border-artifact bucket with a tiny-sample mean of ~26 was
+  poisoning the min-max normalization) and where the ranking bars used an unrelated palette.
+- **MEES Distortion** — the Vein 1 findings visualized: observed-vs-counterfactual density
+  with shaded excess/missing mass, the year-by-year b chart with CI whiskers and 2018/2023
+  policy markers, and a Vein 2 mechanism summary.
+- **Audit Triage** — an uncertainty-ranked inspection queue over the 2025 out-of-time set
+  with a budget slider (top-5% finds High-risk at ~14% vs ~7.4% random). The **uncertainty
+  column was a real bug**: it displayed raw Shannon entropy in nats (max ln(3)=1.0986,
+  rendered as "109.86%") repeated across the many buildings genuinely pinned at the entropy
+  ceiling. Fixed by normalizing to a bounded 0-100% score, tie-breaking the queue by
+  predicted High-risk probability, and captioning what the metric is and how many buildings
+  hit the ceiling.
+
+## 13. Prior-art / competitor landscape (verified)
+
+Documented in `analysis/COMPETITOR_LANDSCAPE.md`: predicting EPC ratings from cheap inputs
+**already exists** — commercially (Haptic's London GPT-based commercial estimator, custom
+"Commercial EPC Calculator" GPTs, TEAM Energy's indicative calculator) and academically
+(LuminLab's Irish-BER MLP; a Turin residential study). Every commercial tool is opaque on
+data and accuracy; the academic work is residential and not on our register. So the honest
+innovation claim is **not** "we predict a rating" but the *combination*: recall-first model
+selection (LuminLab names the imbalance problem; we act on it), register-manipulation
+evidence (Veins 1-2, no prior art found), full reproducibility (named public dataset, exact
+scale, temporal holdout, open metrics — which none of the opaque commercial tools can
+match), and a portfolio-level audit-triage persona no competitor serves. **Lead the pitch
+with the register-manipulation finding, not the prediction.**
+
+## 14. What isn't done yet
+
+- Multi-seed / bootstrapped confidence intervals around the recall numbers; robustness
+  sweeps for the bunching estimator (polynomial degree, window width, Cattaneo local-
+  polynomial density as an alternative).
+- Vein 3 (conformal prediction under drift; value-of-information audit triage formalized).
+- Scrum artifacts and the standalone SDG Mapping / User Manual / Sustainability Impact
+  Report documents the rubric requires separately.
+- The IEEE-format paper(s) — Vein 1 has a blueprint ready; the accuracy-vs-recall and
+  register-distortion angles are the strong throughlines.
+
+## 15. Where everything lives
 
 ```
 GreenLedger/
 ├── data/
-│   ├── cbecs2018_final_public.csv     — raw CBECS 2018 microdata
-│   └── 2018microdata_codebook.xlsx    — EIA's variable codebook
-├── notebooks/greenledger.ipynb        — the executed pipeline, all outputs saved
-├── greenledger/pipeline.py            — shared feature engineering (notebook + app in sync)
-├── greenledger/recommendations.py     — cited recommendation cards
-├── export_artifacts.py                — trains models, measures green-computing stats, exports for the app
-├── models/, app_data/                 — generated model + benchmarking artifacts
-├── app.py                             — the Streamlit app
-├── requirements.txt                   — pinned, working versions
-├── README.md                          — quick-start + results summary
-└── PROCESS.md                         — this file
+│   ├── uk_epc/*.csv                    — non-domestic EPC certificates by year (gitignored)
+│   ├── uk_outcodes.csv                 — postcode-district → lat/long lookup
+│   ├── geo/                            — raw ONS region boundary GeoJSONs
+│   └── cbecs2018_final_public.csv      — v1's dataset, kept for history
+├── notebooks/greenledger.ipynb         — executed pipeline (UK EPC, accuracy-vs-recall story)
+├── greenledger/
+│   ├── pipeline.py                     — shared feature engineering (notebook + app in sync)
+│   ├── recommendations.py              — cited (Carbon Trust / GOV.UK) recommendation cards
+│   └── report.py                       — optional grounded LLM report (Groq)
+├── analysis/
+│   ├── vein1_bunching.py               — MEES threshold bunching estimator
+│   ├── vein1_export_density.py         — exports density/by-year CSVs for the app
+│   ├── vein2_panel.py                  — UPRN repeat-certificate mechanism test
+│   ├── RELATED_WORK_VEIN1.md           — verified citations + gap statement
+│   ├── MECHANISM_VEIN2.md              — panel findings
+│   ├── PAPER_BLUEPRINT_VEIN1.md        — IEEE paper structure
+│   ├── COMPETITOR_LANDSCAPE.md         — verified prior-art / differentiators
+│   └── results/                        — CSVs + figures from the analyses
+├── export_artifacts.py                 — trains models, temporal holdout, green-computing +
+│                                          dashboard + triage exports
+├── models/, app_data/                  — generated model + dashboard + bunching + triage artifacts
+├── app.py                              — the 5-tab Streamlit platform
+├── requirements.txt                    — pinned, working versions
+├── README.md                           — quick-start + results summary
+├── RESEARCH_ROADMAP.md                 — the three research veins
+└── PROCESS.md                          — this file
 ```
