@@ -14,7 +14,6 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-import pydeck as pdk
 import plotly.express as px
 import plotly.graph_objects as go
 import shap
@@ -122,12 +121,98 @@ div[data-testid="stProgress"] > div > div > div {
 .tier-medium { background: rgba(232,211,113,0.10); color: var(--amber); border: 1px solid var(--amber); }
 .tier-high   { background: rgba(255,77,109,0.10);  color: var(--crimson); border: 1px solid var(--crimson);
                box-shadow: 0 0 16px -4px var(--crimson); }
+
+/* ---------- dashboard hero / kpi / rankings ---------- */
+.hero-card { border: 1px solid rgba(255,77,214,0.45); border-radius: 16px;
+    background: linear-gradient(160deg, #101018 0%, #0c1210 100%);
+    padding: 18px 24px; margin-bottom: 14px;
+    box-shadow: 0 0 30px -12px rgba(255,77,214,0.5); }
+.hero-title { font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; color:#fff; margin:0; }
+.hero-sub { color:#aab8b0; font-size:0.92rem; margin-top:2px; }
+.hero-sub b { color:#e9f5ee; }
+.chip { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:0.68rem;
+    letter-spacing:0.08em; text-transform:uppercase; padding:3px 10px; border-radius:999px;
+    border:1px solid rgba(255,77,214,0.6); color:#ff4dd6; margin:0 8px; }
+.kpi { border-radius:16px; padding:16px 18px 12px; margin-bottom:14px; position:relative;
+    background: linear-gradient(165deg, #12181a 0%, #0d1212 100%);
+    border:1px solid rgba(255,255,255,0.07); overflow:hidden;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.4); }
+.kpi::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; }
+.kpi-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.kpi-icon { width:34px; height:34px; border-radius:10px; display:flex; align-items:center;
+    justify-content:center; font-size:1.05rem; }
+.kpi-title { font-family:'Sora',sans-serif; font-weight:600; font-size:0.9rem; color:#dfe9e3; }
+.kpi-value { font-family:'IBM Plex Mono',monospace; font-weight:500; font-size:1.9rem;
+    color:#ffffff; line-height:1.1; }
+.kpi-delta { font-size:0.82rem; margin-top:3px; }
+.kpi-delta .up { color:#39ff8c; } .kpi-delta .down { color:#ff4d6d; }
+.kpi-delta span.lbl { color:#8b988f; }
+.kpi-sub { color:#8b988f; font-size:0.8rem; border-top:1px solid rgba(255,255,255,0.06);
+    margin-top:10px; padding-top:8px; }
+.kpi-spark { margin-top:8px; }
+.panel { border-radius:16px; padding:18px 20px; background:linear-gradient(165deg,#12181a 0%,#0d1212 100%);
+    border:1px solid rgba(255,255,255,0.07); box-shadow:0 10px 26px rgba(0,0,0,0.4); margin-bottom:14px; }
+.panel-head { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.panel-title { font-family:'Sora',sans-serif; font-weight:700; font-size:1.05rem; color:#fff; }
+.panel-sub { color:#8b988f; font-size:0.8rem; margin-bottom:10px; }
+.rank-row { display:flex; align-items:center; gap:12px; padding:9px 0;
+    border-bottom:1px solid rgba(255,255,255,0.05); }
+.rank-chip { width:24px; height:24px; border-radius:7px; display:flex; align-items:center;
+    justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.75rem;
+    background:#1a2420; color:#aab8b0; flex:none; }
+.rank-chip.first { background:rgba(232,211,113,0.18); color:#e8d371; }
+.rank-name { font-weight:600; color:#e9f5ee; font-size:0.92rem; width:190px; flex:none; }
+.rank-track { flex:1; height:5px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden; }
+.rank-fill { height:100%; border-radius:999px; }
+.rank-val { font-family:'IBM Plex Mono',monospace; font-size:0.9rem; color:#fff; width:120px;
+    text-align:right; flex:none; }
+.rank-val span { color:#8b988f; font-size:0.78rem; margin-right:8px; }
+.heat-scale { border-radius:12px; border:1px solid rgba(255,255,255,0.07); padding:12px 16px;
+    background:#0d1212; margin-top:10px; }
+.heat-bar { height:8px; border-radius:999px;
+    background:linear-gradient(90deg,#39ff8c,#b8e994,#e8d371,#e0703f,#ff4d6d,#c23fd6); }
+.heat-lbl { display:flex; justify-content:space-between; color:#8b988f; font-size:0.75rem; margin-top:5px; }
+.heat-lbl b { font-family:'IBM Plex Mono',monospace; }
 </style>
 """, unsafe_allow_html=True)
 
 
 def tier_badge(tier):
     return f'<span class="tier-badge tier-{tier.lower()}">{tier}</span>'
+
+
+def sparkline_svg(values, color, width=170, height=38):
+    """Mini bar sparkline as inline SVG, last bar emphasized (real data only)."""
+    v = np.asarray(values, dtype=float)
+    if len(v) == 0 or np.nanmax(v) <= 0:
+        return ""
+    v = v / np.nanmax(v)
+    n = len(v)
+    gap = 3
+    bw = max(2, (width - gap * (n - 1)) / n)
+    bars = []
+    for i, val in enumerate(v):
+        h = max(3, val * (height - 2))
+        x = i * (bw + gap)
+        op = "1.0" if i == n - 1 else "0.45"
+        bars.append(f'<rect x="{x:.1f}" y="{height-h:.1f}" width="{bw:.1f}" height="{h:.1f}" '
+                     f'rx="2" fill="{color}" opacity="{op}"/>')
+    return (f'<svg class="kpi-spark" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">{"".join(bars)}</svg>')
+
+
+def kpi_card(icon, title, value, delta_html, sub, spark, accent):
+    return f"""
+<div class="kpi" style="border-top:3px solid {accent};">
+  <div class="kpi-head">
+    <div class="kpi-icon" style="background:{accent}22; border:1px solid {accent}55;">{icon}</div>
+    <div class="kpi-title">{title}</div>
+  </div>
+  <div class="kpi-value">{value}</div>
+  <div class="kpi-delta">{delta_html}</div>
+  {spark}
+  <div class="kpi-sub">{sub}</div>
+</div>"""
 
 
 @st.cache_resource
@@ -154,10 +239,10 @@ def load_dashboard_data():
 
 
 @st.cache_data
-def load_map_sample():
-    dash = load_dashboard_data()
-    pts = dash.dropna(subset=["latitude", "longitude"])
-    return pts.sample(n=min(20000, len(pts)), random_state=42)
+def load_region_geo():
+    gj = json.loads((APP_DATA_DIR / "uk_regions.geojson").read_text())
+    centroids = pd.read_csv(APP_DATA_DIR / "uk_region_centroids.csv")
+    return gj, centroids
 
 
 @st.cache_data
@@ -323,80 +408,180 @@ with tab_assess:
 # ================================================================ Dashboard
 with tab_dash:
     dash = load_dashboard_data()
-    st.title("Register Dashboard")
-    st.caption(f"{len(dash):,} real small-business EPC records, "
-               f"{dash['lodgement_year'].min()}–{dash['lodgement_year'].max()}")
+    hour = pd.Timestamp.now().hour
+    daypart = "morning" if hour < 12 else ("afternoon" if hour < 18 else "evening")
 
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Buildings analysed", f"{len(dash):,}")
-    k2.metric("Median asset rating", f"{dash['asset_rating'].median():.0f}",
-               help="Lower = more energy efficient")
-    k3.metric("Share High-risk", f"{(dash['risk_tier']=='High').mean()*100:.1f}%")
-    trend = dash.groupby("lodgement_year")["asset_rating"].mean()
-    k4.metric("Rating trend", f"{trend.iloc[-1]:.0f}",
-               delta=f"{trend.iloc[-1]-trend.iloc[0]:+.0f} since {trend.index.min()}", delta_color="inverse")
-    k5.metric("Most common fuel", dash["main_heating_fuel"].mode()[0])
+    hero_col, filt_col = st.columns([3.2, 1])
+    with hero_col:
+        st.markdown(f"""
+<div class="hero-card">
+  <p class="hero-title">Overview</p>
+  <p class="hero-sub">Good {daypart}, <b>GreenLedger</b>
+     <span class="chip">Register Window</span>
+     {dash['lodgement_year'].min()} → {dash['lodgement_year'].max()} ·
+     England &amp; Wales non-domestic EPC register</p>
+</div>""", unsafe_allow_html=True)
+    with filt_col:
+        yr_filter = st.radio("Period", ["All years", "Since 2022", "2025 only"],
+                              key="dash_period", label_visibility="collapsed")
+    yr_min = {"All years": 2018, "Since 2022": 2022, "2025 only": 2025}[yr_filter]
+    d = dash[dash["lodgement_year"] >= yr_min]
 
-    st.divider()
-    m1, m2 = st.columns([1.4, 1])
-    with m1:
-        st.markdown("#### Where these buildings are")
-        map_sample = load_map_sample()
-        layer = pdk.Layer(
-            "HexagonLayer", data=map_sample, get_position=["longitude", "latitude"],
-            radius=5000, elevation_scale=200, elevation_range=[0, 3000],
-            pickable=True, extruded=True,
-            get_color_weight="asset_rating", color_aggregation="MEAN",
-            color_range=[[57, 255, 140, 210], [126, 240, 168, 210], [232, 211, 113, 210],
-                          [224, 112, 63, 210], [200, 40, 40, 230]],
-        )
-        st.pydeck_chart(pdk.Deck(
-            layers=[layer],
-            initial_view_state=pdk.ViewState(latitude=52.6, longitude=-1.8, zoom=5.6, pitch=15),
-            map_style="dark", tooltip={"text": "{count} buildings in this area"}))
-        st.caption("Hexagon height = building count, color = mean asset rating (green = efficient, "
-                   "red = poor). Points are jittered within their postcode district — the register "
-                   "gives district-level location, not exact coordinates.")
-    with m2:
-        st.markdown("#### Rating bands (A+ best, G worst)")
-        band_counts = dash["asset_rating_band"].value_counts().reindex(
+    yearly = dash.groupby("lodgement_year").agg(
+        n=("asset_rating", "size"), med=("asset_rating", "median"),
+        high=("risk_tier", lambda s: (s == "High").mean() * 100),
+        cplus=("asset_rating", lambda s: (s <= 75).mean() * 100)).reset_index()
+
+    def yoy(col, pct=False):
+        if len(yearly) < 2:
+            return ""
+        a, b = yearly[col].iloc[-2], yearly[col].iloc[-1]
+        chg = (b - a) / a * 100 if pct else b - a
+        return chg
+
+    kcol, chartcol = st.columns([1.15, 1.6])
+    with kcol:
+        g1, g2 = st.columns(2)
+        n_chg = yoy("n", pct=True)
+        g1.markdown(kpi_card(
+            "📜", "Certificates", f"{len(d):,}",
+            f'<span class="{ "down" if n_chg < 0 else "up" }">{"▼" if n_chg < 0 else "▲"} '
+            f'{abs(n_chg):.1f}%</span> <span class="lbl">vs prior year</span>',
+            f"{d['floor_area'].median():.0f} m² median floor area",
+            sparkline_svg(yearly["n"], "#ff4dd6"), "#ff4dd6"), unsafe_allow_html=True)
+        med_chg = yearly["med"].iloc[-1] - yearly["med"].iloc[0]
+        g2.markdown(kpi_card(
+            "⚡", "Median rating", f"{d['asset_rating'].median():.0f}",
+            f'<span class="up">▼ {abs(med_chg):.0f} pts</span> '
+            f'<span class="lbl">since {yearly["lodgement_year"].min()} (lower = better)</span>',
+            "Official assessed asset rating",
+            sparkline_svg(yearly["med"], "#39ff8c"), "#39ff8c"), unsafe_allow_html=True)
+        g3, g4 = st.columns(2)
+        high_now = (d["risk_tier"] == "High").mean() * 100
+        high_chg = yearly["high"].iloc[-1] - yearly["high"].iloc[0]
+        g3.markdown(kpi_card(
+            "🔥", "High-risk share", f"{high_now:.1f}%",
+            f'<span class="{ "up" if high_chg < 0 else "down" }">{"▼" if high_chg < 0 else "▲"} '
+            f'{abs(high_chg):.1f} pts</span> <span class="lbl">since {yearly["lodgement_year"].min()}</span>',
+            "Bands E-G collapsed to High tier",
+            sparkline_svg(yearly["high"], "#e8a05c"), "#e8a05c"), unsafe_allow_html=True)
+        cplus_now = (d["asset_rating"] <= 75).mean() * 100
+        cplus_chg = yearly["cplus"].iloc[-1] - yearly["cplus"].iloc[0]
+        g4.markdown(kpi_card(
+            "🏅", "Rated C or better", f"{cplus_now:.1f}%",
+            f'<span class="{ "up" if cplus_chg > 0 else "down" }">{"▲" if cplus_chg > 0 else "▼"} '
+            f'{abs(cplus_chg):.1f} pts</span> <span class="lbl">since {yearly["lodgement_year"].min()}</span>',
+            "The announced 2027-31 direction of travel",
+            sparkline_svg(yearly["cplus"], "#35e6e6"), "#35e6e6"), unsafe_allow_html=True)
+    with chartcol:
+        st.markdown('<div class="panel"><div class="panel-head">'
+                     '<div class="kpi-icon" style="background:#39ff8c22;border:1px solid #39ff8c55;">📊</div>'
+                     '<div class="panel-title">Rating bands</div></div>'
+                     f'<div class="panel-sub">{yr_filter} · A+ best → G worst · MEES bans letting F/G</div>',
+                     unsafe_allow_html=True)
+        band_counts = d["asset_rating_band"].value_counts().reindex(
             ["A+", "A", "B", "C", "D", "E", "F", "G"]).fillna(0)
-        fig = px.bar(x=band_counts.index, y=band_counts.values,
-                      color=band_counts.index, color_discrete_map=BAND_COLORS)
+        fig = go.Figure(go.Bar(
+            x=band_counts.index, y=band_counts.values,
+            marker=dict(color=[BAND_COLORS[b] for b in band_counts.index],
+                         cornerradius=6),
+        ))
         fig.update_layout(**PLOTLY_DARK_LAYOUT, showlegend=False, xaxis_title="",
-                            yaxis_title="Buildings", margin=dict(l=0, r=0, t=10, b=0), height=260)
+                            yaxis_title="Buildings", margin=dict(l=0, r=0, t=6, b=0), height=372)
         st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown("#### Business type mix")
-        tc = dash["property_type_group"].value_counts()
-        fig2 = px.pie(values=tc.values, names=tc.index, hole=0.55,
-                       color_discrete_sequence=[NEON, CYAN, AMBER])
-        fig2.update_layout(**PLOTLY_DARK_LAYOUT, margin=dict(l=0, r=0, t=10, b=0), height=260,
-                             legend=dict(orientation="h", yanchor="bottom", y=-0.25))
-        st.plotly_chart(fig2, use_container_width=True)
+    # ---------- map + regional rankings ----------
+    st.markdown('<div class="panel"><div class="panel-head">'
+                 '<div class="kpi-icon" style="background:#ff4dd622;border:1px solid #ff4dd655;">📍</div>'
+                 '<div class="panel-title">Buildings by region</div></div>'
+                 f'<div class="panel-sub">{len(d):,} buildings · hover the map to explore · '
+                 'color = mean asset rating in each area</div>', unsafe_allow_html=True)
+    mcol, rcol = st.columns([1, 1.15])
+    with mcol:
+        geojson, centroids = load_region_geo()
+        reg_stats = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown"])].groupby(
+            "uk_region").agg(n=("asset_rating", "size"), mean_rating=("asset_rating", "mean")).reset_index()
+        figm = go.Figure(go.Choropleth(
+            geojson=geojson, locations=reg_stats["uk_region"], featureidkey="properties.region",
+            z=reg_stats["mean_rating"],
+            colorscale=[[0.0, "#39ff8c"], [0.25, "#b8e994"], [0.5, "#e8d371"],
+                         [0.75, "#e0703f"], [1.0, "#c23fd6"]],
+            marker_line_color="#0a0f0d", marker_line_width=1.4,
+            showscale=False,
+            customdata=reg_stats[["n"]],
+            hovertemplate="<b>%{location}</b><br>%{customdata[0]:,} buildings<br>"
+                           "mean rating %{z:.0f}<extra></extra>",
+        ))
+        lab = centroids.merge(reg_stats, left_on="region", right_on="uk_region")
+        figm.add_trace(go.Scattergeo(
+            lon=lab["lon"], lat=lab["lat"], mode="text",
+            text=[f"{n:,}" for n in lab["n"]],
+            textfont=dict(family="IBM Plex Mono", size=11, color="#ffffff"),
+            hoverinfo="skip"))
+        figm.update_geos(fitbounds="locations", visible=False, bgcolor="rgba(0,0,0,0)",
+                          projection_type="mercator")
+        figm.update_layout(**PLOTLY_DARK_LAYOUT, height=460,
+                            margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+        st.plotly_chart(figm, use_container_width=True)
+        st.markdown("""
+<div class="heat-scale">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:0.08em;
+       text-transform:uppercase;color:#aab8b0;margin-bottom:6px;">Heat scale · mean asset rating</div>
+  <div class="heat-bar"></div>
+  <div class="heat-lbl"><b style="color:#39ff8c;">Efficient</b><b style="color:#c23fd6;">Poor</b></div>
+</div>""", unsafe_allow_html=True)
+    with rcol:
+        st.markdown('<div class="panel-sub" style="font-family:\'IBM Plex Mono\',monospace;'
+                     'letter-spacing:0.08em;text-transform:uppercase;">Region rankings</div>',
+                     unsafe_allow_html=True)
+        # "Scotland" rows are outcode-lookup border artifacts -- the register is E&W only
+        reg = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown", "Scotland"])]
+        rank = reg.groupby("uk_region").agg(
+            n=("asset_rating", "size"),
+            high=("risk_tier", lambda s: (s == "High").mean() * 100)).sort_values("n", ascending=False)
+        total = rank["n"].sum()
+        rows = []
+        max_n = rank["n"].max()
+        grads = ["linear-gradient(90deg,#ff4dd6,#ff4d6d)"] + \
+                 ["linear-gradient(90deg,#6c5ce7,#35e6e6)"] * 20
+        for i, (region, r) in enumerate(rank.head(9).iterrows(), start=1):
+            chip_cls = "rank-chip first" if i == 1 else "rank-chip"
+            rows.append(f"""
+<div class="rank-row">
+  <div class="{chip_cls}">{i}</div>
+  <div class="rank-name">{region}</div>
+  <div class="rank-track"><div class="rank-fill" style="width:{r['n']/max_n*100:.0f}%;
+       background:{grads[i-1]};"></div></div>
+  <div class="rank-val"><span>{r['n']/total*100:.1f}%</span>{r['n']:,.0f}</div>
+</div>""")
+        st.markdown("".join(rows), unsafe_allow_html=True)
+        worst = rank.sort_values("high", ascending=False).head(1)
+        st.markdown(f'<div class="panel-sub" style="margin-top:10px;">Highest High-risk share: '
+                     f'<b style="color:#ff4d6d;">{worst.index[0]}</b> at {worst["high"].iloc[0]:.1f}%</div>',
+                     unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.caption("Region shapes are real ONS boundaries (England & Wales); each region is "
+               "colored by the mean assessed rating of its buildings and labeled with its "
+               "building count.")
 
-    st.divider()
-    d1, d2 = st.columns(2)
-    with d1:
-        st.markdown("#### Efficiency is improving — real year-over-year trend")
-        yearly = trend.reset_index()
-        fig3 = px.line(yearly, x="lodgement_year", y="asset_rating", markers=True)
-        fig3.update_traces(line_color=NEON, marker_color=NEON, line_width=3,
-                             marker=dict(size=9, line=dict(width=1, color="#04150c")))
-        fig3.update_layout(**PLOTLY_DARK_LAYOUT, yaxis_title="Mean asset rating (lower = better)",
-                             xaxis_title="", margin=dict(l=0, r=0, t=10, b=0), height=300)
-        st.plotly_chart(fig3, use_container_width=True)
-        st.caption("This real trend is why models are trained on 2018-2024 and tested on 2025 "
-                   "data they never saw, rather than a random split.")
-    with d2:
-        st.markdown("#### Risk tier by region")
-        rt = pd.crosstab(dash["uk_region"], dash["risk_tier"], normalize="index") * 100
-        rt = rt.reindex(columns=["Low", "Medium", "High"]).sort_values("High")
-        fig4 = px.bar(rt, orientation="h", color_discrete_map=TIER_COLORS)
-        fig4.update_layout(**PLOTLY_DARK_LAYOUT, xaxis_title="% of buildings", yaxis_title="",
-                             barmode="stack", margin=dict(l=0, r=0, t=10, b=0), height=300,
-                             legend=dict(orientation="h", yanchor="bottom", y=-0.3))
-        st.plotly_chart(fig4, use_container_width=True)
+    # ---------- trend ----------
+    st.markdown('<div class="panel"><div class="panel-head">'
+                 '<div class="kpi-icon" style="background:#35e6e622;border:1px solid #35e6e655;">📈</div>'
+                 '<div class="panel-title">Efficiency is improving — the real year-over-year trend</div></div>'
+                 '<div class="panel-sub">Mean assessed rating, all years (lower = better). This trend is '
+                 'why models train on 2018-2024 and are tested on 2025 data they never saw.</div>',
+                 unsafe_allow_html=True)
+    figt = go.Figure()
+    figt.add_trace(go.Scatter(
+        x=yearly["lodgement_year"], y=yearly["med"], mode="lines+markers",
+        line=dict(color=NEON, width=3, shape="spline"),
+        marker=dict(size=9, color=NEON, line=dict(width=1, color="#04150c")),
+        fill="tozeroy", fillcolor="rgba(57,255,140,0.07)"))
+    figt.update_layout(**PLOTLY_DARK_LAYOUT, yaxis_title="Median asset rating",
+                        xaxis_title="", margin=dict(l=0, r=0, t=6, b=0), height=280)
+    st.plotly_chart(figt, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ================================================================ MEES Distortion
 with tab_mees:
@@ -568,7 +753,7 @@ this scale? (2) does the MEES letting ban distort the certificate distribution i
   area is the most common observable lever.
 
 **Limitations:** England & Wales coverage only; postcode-district location precision
-(map points jittered, disclosed); risk tiers collapse the official 8-band scale to 3;
+(the dashboard maps at region level for that reason); risk tiers collapse the official 8-band scale to 3;
 the register's audit-grade feature set is thin (mainly HVAC capacity); escape rates
 are conditional on re-certification (selection); fabric changes are invisible in the
 public register. Recommendations cite Carbon Trust / GOV.UK published ranges — no
