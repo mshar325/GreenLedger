@@ -369,11 +369,33 @@ scale, temporal holdout, open metrics — which none of the opaque commercial to
 match), and a portfolio-level audit-triage persona no competitor serves. **Lead the pitch
 with the register-manipulation finding, not the prediction.**
 
+## 13a. Red-teaming Vein 1 (robustness + defense brief)
+
+Before treating the bunching result as viva-ready, the flagship claim was attacked on its
+own terms (`analysis/VEIN1_DEFENSE.md`, `vein1_robustness.py`). Two hardening analyses on
+the pooled 2018-2026 register (840,760 certificates):
+
+- **Specification sweep:** b at the E/F boundary re-estimated across polynomial degrees
+  {3,4,5} × excluded-window widths {±3,±5,±7} — all nine give b ∈ [2.12, 3.50] with every
+  bootstrap CI clear of zero. Not a one-spec artifact.
+- **Boundary permutation:** the identical estimator run at every integer boundary 70-140.
+  The median boundary has b = 0.04 (no bunching anywhere typical); 125 exceeds 98% of all
+  boundaries, and the E/F neighbourhood averages b = 2.47 vs −0.38 far away. The figure
+  shows the excess at 120-125 *mirrored by a deficit at 126-135* — the relabeling hole made
+  visible. Disclosed honestly rather than buried: one numerically-unstable estimate
+  (boundary 137, excluded) and one unexplained mid-F blip (136, b=3.57) that lacks 125's
+  other two signatures (pre-policy absence, M/B relabeling).
+
+Key discipline point captured in the defense brief: **stop calling it "gaming/manipulation"
+as the headline** — bunching at a consequential threshold is also what honest do-just-enough
+compliance produces. The defensible claim is "a strong behavioral response at the E/F notch,
+with a small identifiable minority (Vein 2's fast-return segment) carrying the manipulation
+signature." The brief pre-writes answers to eight anticipated objections.
+
 ## 14. What isn't done yet
 
-- Multi-seed / bootstrapped confidence intervals around the recall numbers; robustness
-  sweeps for the bunching estimator (polynomial degree, window width, Cattaneo local-
-  polynomial density as an alternative).
+- Multi-seed / bootstrapped confidence intervals around the recall numbers; the Cattaneo
+  local-polynomial density test as a third estimator (spec sweep + permutation done).
 - Vein 3 (conformal prediction under drift; value-of-information audit triage formalized).
 - Scrum artifacts and the standalone SDG Mapping / User Manual / Sustainability Impact
   Report documents the rubric requires separately.
