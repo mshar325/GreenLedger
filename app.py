@@ -500,7 +500,9 @@ with tab_dash:
     mcol, rcol = st.columns([1, 1.15])
     with mcol:
         geojson, centroids = load_region_geo()
-        reg_stats = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown"])].groupby(
+        # exclude Unknown AND the Scotland border-artifact bucket -- its tiny-sample mean
+        # (~26) was poisoning the min-max normalization and turning the whole map pink
+        reg_stats = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown", "Scotland"])].groupby(
             "uk_region").agg(n=("asset_rating", "size"), mean_rating=("asset_rating", "mean")).reset_index()
         # z is pre-normalized to 0-1 against the regional min/max and the scale is
         # pinned to the SAME six stops as the .heat-bar legend gradient, so the map
