@@ -181,6 +181,23 @@ def tier_badge(tier):
     return f'<span class="tier-badge tier-{tier.lower()}">{tier}</span>'
 
 
+# One heat gradient, used by the map, the legend strip, AND the ranking bars, so no
+# panel can drift onto its own palette again.
+HEAT_STOPS = [(0.0, "#39ff8c"), (0.2, "#b8e994"), (0.4, "#e8d371"),
+              (0.6, "#e0703f"), (0.8, "#ff4d6d"), (1.0, "#c23fd6")]
+
+
+def heat_color(t):
+    t = min(max(float(t), 0.0), 1.0)
+    for (t0, c0), (t1, c1) in zip(HEAT_STOPS, HEAT_STOPS[1:]):
+        if t <= t1:
+            f = (t - t0) / (t1 - t0)
+            rgb = [round(int(c0[i:i+2], 16) + f * (int(c1[i:i+2], 16) - int(c0[i:i+2], 16)))
+                   for i in (1, 3, 5)]
+            return "#{:02x}{:02x}{:02x}".format(*rgb)
+    return HEAT_STOPS[-1][1]
+
+
 def sparkline_svg(values, color, width=170, height=38):
     """Mini bar sparkline as inline SVG, last bar emphasized (real data only)."""
     v = np.asarray(values, dtype=float)
@@ -497,24 +514,23 @@ with tab_dash:
                  '<div class="panel-title">Buildings by region</div></div>'
                  f'<div class="panel-sub">{len(d):,} buildings · hover the map to explore · '
                  'color = mean asset rating in each area</div>', unsafe_allow_html=True)
+    # Region stats computed ONCE, shared by the map, legend, and ranking bars --
+    # excluding Unknown and the Scotland border-artifact bucket (its tiny-sample
+    # mean ~26 was poisoning the min-max normalization and turning the map pink).
+    reg_stats = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown", "Scotland"])].groupby(
+        "uk_region").agg(n=("asset_rating", "size"), mean_rating=("asset_rating", "mean"),
+                          high=("risk_tier", lambda s: (s == "High").mean() * 100)).reset_index()
+    rmin, rmax = reg_stats["mean_rating"].min(), reg_stats["mean_rating"].max()
+    reg_stats["z_norm"] = (reg_stats["mean_rating"] - rmin) / max(rmax - rmin, 1e-9)
+    reg_stats["heat"] = reg_stats["z_norm"].map(heat_color)
+
     mcol, rcol = st.columns([1, 1.15])
     with mcol:
         geojson, centroids = load_region_geo()
-        # exclude Unknown AND the Scotland border-artifact bucket -- its tiny-sample mean
-        # (~26) was poisoning the min-max normalization and turning the whole map pink
-        reg_stats = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown", "Scotland"])].groupby(
-            "uk_region").agg(n=("asset_rating", "size"), mean_rating=("asset_rating", "mean")).reset_index()
-        # z is pre-normalized to 0-1 against the regional min/max and the scale is
-        # pinned to the SAME six stops as the .heat-bar legend gradient, so the map
-        # and the legend cannot drift apart (they did when plotly auto-normalized).
-        HEAT_STOPS = [[0.0, "#39ff8c"], [0.2, "#b8e994"], [0.4, "#e8d371"],
-                       [0.6, "#e0703f"], [0.8, "#ff4d6d"], [1.0, "#c23fd6"]]
-        rmin, rmax = reg_stats["mean_rating"].min(), reg_stats["mean_rating"].max()
-        reg_stats["z_norm"] = (reg_stats["mean_rating"] - rmin) / max(rmax - rmin, 1e-9)
         figm = go.Figure(go.Choropleth(
             geojson=geojson, locations=reg_stats["uk_region"], featureidkey="properties.region",
             z=reg_stats["z_norm"], zmin=0.0, zmax=1.0,
-            colorscale=HEAT_STOPS,
+            colorscale=[[t, c] for t, c in HEAT_STOPS],
             marker_line_color="#0a0f0d", marker_line_width=1.4,
             showscale=False,
             customdata=reg_stats[["n", "mean_rating"]],
@@ -542,32 +558,30 @@ with tab_dash:
 </div>""", unsafe_allow_html=True)
     with rcol:
         st.markdown('<div class="panel-sub" style="font-family:\'IBM Plex Mono\',monospace;'
-                     'letter-spacing:0.08em;text-transform:uppercase;">Region rankings</div>',
+                     'letter-spacing:0.08em;text-transform:uppercase;">Region rankings · '
+                     'bar colour = same efficiency heat as the map</div>',
                      unsafe_allow_html=True)
-        # "Scotland" rows are outcode-lookup border artifacts -- the register is E&W only
-        reg = d[d["uk_region"].notna() & ~d["uk_region"].isin(["Unknown", "Scotland"])]
-        rank = reg.groupby("uk_region").agg(
-            n=("asset_rating", "size"),
-            high=("risk_tier", lambda s: (s == "High").mean() * 100)).sort_values("n", ascending=False)
+        rank = reg_stats.set_index("uk_region").sort_values("n", ascending=False)
         total = rank["n"].sum()
-        rows = []
         max_n = rank["n"].max()
-        grads = ["linear-gradient(90deg,#ff4dd6,#ff4d6d)"] + \
-                 ["linear-gradient(90deg,#6c5ce7,#35e6e6)"] * 20
-        for i, (region, r) in enumerate(rank.head(9).iterrows(), start=1):
+        rows = []
+        for i, (region, r) in enumerate(rank.head(10).iterrows(), start=1):
             chip_cls = "rank-chip first" if i == 1 else "rank-chip"
+            c = r["heat"]
             rows.append(f"""
 <div class="rank-row">
   <div class="{chip_cls}">{i}</div>
   <div class="rank-name">{region}</div>
   <div class="rank-track"><div class="rank-fill" style="width:{r['n']/max_n*100:.0f}%;
-       background:{grads[i-1]};"></div></div>
+       background:linear-gradient(90deg,{c}88,{c}); box-shadow:0 0 8px -2px {c};"></div></div>
   <div class="rank-val"><span>{r['n']/total*100:.1f}%</span>{r['n']:,.0f}</div>
 </div>""")
         st.markdown("".join(rows), unsafe_allow_html=True)
         worst = rank.sort_values("high", ascending=False).head(1)
         st.markdown(f'<div class="panel-sub" style="margin-top:10px;">Highest High-risk share: '
-                     f'<b style="color:#ff4d6d;">{worst.index[0]}</b> at {worst["high"].iloc[0]:.1f}%</div>',
+                     f'<b style="color:#ff4d6d;">{worst.index[0]}</b> at {worst["high"].iloc[0]:.1f}% · '
+                     f'best mean rating: <b style="color:#39ff8c;">'
+                     f'{rank.sort_values("mean_rating").index[0]}</b></div>',
                      unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     st.caption("Region shapes are real ONS boundaries (England & Wales); each region is "
