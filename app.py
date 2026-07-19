@@ -289,16 +289,16 @@ with tab_dash:
         map_sample = map_points.sample(n=min(25000, len(map_points)), random_state=42)
         layer = pdk.Layer(
             "HexagonLayer", data=map_sample, get_position=["longitude", "latitude"],
-            radius=6000, elevation_scale=250, elevation_range=[0, 3000],
+            radius=5000, elevation_scale=200, elevation_range=[0, 3000],
             pickable=True, extruded=True,
-            get_elevation_weight="asset_rating", elevation_aggregation="MEAN",
-            colorRange=[[57, 255, 140, 190], [34, 196, 110, 190], [232, 211, 113, 190],
-                        [224, 112, 63, 190], [194, 63, 214, 220]],
+            get_color_weight="asset_rating", color_aggregation="MEAN",
+            color_range=[[57, 255, 140, 210], [126, 240, 168, 210], [232, 211, 113, 210],
+                          [224, 112, 63, 210], [200, 40, 40, 230]],
         )
-        view_state = pdk.ViewState(latitude=53.0, longitude=-2.0, zoom=5, pitch=45)
+        view_state = pdk.ViewState(latitude=52.6, longitude=-1.8, zoom=5.6, pitch=15)
         st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state,
                                    map_style="dark",
-                                   tooltip={"text": "{count} buildings\navg rating (bin): see color"}))
+                                   tooltip={"text": "{count} buildings in this area"}))
         st.caption("Hexagon height = building count, color = mean asset rating (green = "
                    "efficient, red = poor) in that area. Points are jittered within their "
                    "postcode district — the register gives district-level location, not "
