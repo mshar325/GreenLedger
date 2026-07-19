@@ -706,26 +706,39 @@ with tab_triage:
         triage = None
 
     if triage is not None:
+        # Normalize Shannon entropy (nats) to a bounded 0-1 uncertainty score by dividing
+        # by its theoretical maximum ln(3) for 3 classes -> 1.0 == a perfectly uniform
+        # 0.33/0.33/0.33 prediction (maximally uncertain), 0.0 == fully confident.
+        triage = triage.copy()
+        triage["uncertainty"] = (triage["uncertainty_entropy"] / np.log(3) * 100).clip(0, 100)
+
         budget = st.slider("Available physical-audit budget (% of building portfolio)",
                             1, 25, 5, key="triage_budget")
         k = max(1, int(len(triage) * budget / 100))
-        queue = triage.sort_values("uncertainty_entropy", ascending=False).head(k)
+        # rank by uncertainty, breaking ties (many buildings pin at the ceiling) by the
+        # predicted High-risk probability, so the queue is deterministic and sensible.
+        queue = triage.sort_values(["uncertainty", "p_high"], ascending=False).head(k)
 
         hit_queue = (queue["actual_tier"] == "High").mean() * 100
         hit_random = (triage["actual_tier"] == "High").mean() * 100
+        n_maxed = int((triage["uncertainty"] >= 99.9).sum())
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Portfolio", f"{len(triage):,} buildings")
         c2.metric("Audit queue", f"{k:,} buildings")
         c3.metric("High-risk found in queue", f"{hit_queue:.1f}%")
         c4.metric("vs random auditing", f"{hit_random:.1f}%",
                    delta=f"{hit_queue-hit_random:+.1f} pts")
-        st.caption("'High-risk found' uses the 2025 ground truth, known here because this is "
-                   "a labeled test year — at deployment time it would be unknown, which is "
-                   "exactly why the queue is ranked by model uncertainty.")
+        st.caption(f"Uncertainty = Shannon entropy of the model's 3-class probabilities, "
+                   f"normalized to 0-100% (100% = a perfectly uniform prediction). "
+                   f"{n_maxed:,} buildings sit at the ceiling — genuinely coin-flip cases — so "
+                   f"within that group the queue breaks ties by predicted High-risk probability. "
+                   f"'High-risk found' uses the 2025 ground truth, known only because this is a "
+                   f"labeled test year; at deployment it would be unknown, which is the whole "
+                   f"point of ranking by uncertainty.")
 
         st.markdown("#### Triage queue — most uncertain first")
         show = queue[["property_type_group", "uk_region", "local_authority", "floor_area_m2",
-                       "main_heating_fuel", "predicted_tier", "p_high", "uncertainty_entropy"]]
+                       "main_heating_fuel", "predicted_tier", "p_high", "uncertainty"]]
         st.dataframe(
             show, use_container_width=True, height=430, hide_index=True,
             column_config={
@@ -736,8 +749,8 @@ with tab_triage:
                 "main_heating_fuel": "Heating fuel",
                 "predicted_tier": "Predicted",
                 "p_high": st.column_config.ProgressColumn("P(High)", min_value=0, max_value=1),
-                "uncertainty_entropy": st.column_config.ProgressColumn(
-                    "Uncertainty", min_value=0, max_value=float(triage["uncertainty_entropy"].max())),
+                "uncertainty": st.column_config.ProgressColumn(
+                    "Uncertainty", min_value=0.0, max_value=100.0, format="%.0f%%"),
             })
 
     with st.expander("Green computing: the measured model tradeoff behind this app"):
