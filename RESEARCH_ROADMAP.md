@@ -42,7 +42,7 @@ small-business register is much less studied. **Run the related-work search befo
 claiming novelty.**
 
 **Why it feeds back into the ML work:** labels near the threshold are partially
-manipulated → any model trained on bands inherits gamed labels near E/F. That is a
+manipulated → any model trained on bands inherits policy-distorted labels near E/F. That is a
 label-noise story with a known, localizable cause — itself a publishable methods note.
 
 ## Vein 2 — What actually improves a rating? A repeat-certificate panel

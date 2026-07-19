@@ -61,6 +61,10 @@ checkable contributions:
    bunching at the E/F letting-ban threshold (b≈0 pre-policy → ~3-3.9 under
    enforcement; placebo boundaries flat), plus a repeat-certificate panel on the
    mechanism. We found **no prior work doing this on EPC data.** This is the lead.
+   **Language discipline (see VEIN1_DEFENSE.md):** frame as "a strong behavioral
+   response at the compliance threshold, a minority of which carries the signature of
+   strategic reporting" — NOT "the register is gamed." Bunching alone is also what
+   honest do-just-enough compliance produces.
 
 3. **Reproducibility as a differentiator.** Every commercial tool above is either
    proprietary-and-unmethodical or not-really-a-model. Ours is fully checkable:
@@ -76,9 +80,12 @@ checkable contributions:
 
 ## D. Pitch guidance
 
-- **Lead with C2 (register manipulation), not the prediction.** "We found evidence
-  the compliance register is being gamed and built a triage tool around the
-  uncertainty that creates" is a sentence no competitor can wave away.
+- **Lead with C2 (register distortion), not the prediction.** "We found a strong,
+  measurable behavioral response at the legal compliance threshold — with a small
+  segment showing the signature of strategic reporting — and built a triage tool
+  around the uncertainty that creates" is a sentence no competitor can wave away,
+  and one that survives the "bunching is just compliance" objection (which the
+  blunter "it's being gamed" version does not).
 - Cite this landscape *out loud* — naming Haptic/LuminLab specifically reads as
   literature-review rigor (CIA-1 Innovation line), not weakness.
 - Never say "nobody does this." Say "prediction is known; *our specific combination*

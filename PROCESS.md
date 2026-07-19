@@ -363,11 +363,14 @@ Documented in `analysis/COMPETITOR_LANDSCAPE.md`: predicting EPC ratings from ch
 (LuminLab's Irish-BER MLP; a Turin residential study). Every commercial tool is opaque on
 data and accuracy; the academic work is residential and not on our register. So the honest
 innovation claim is **not** "we predict a rating" but the *combination*: recall-first model
-selection (LuminLab names the imbalance problem; we act on it), register-manipulation
+selection (LuminLab names the imbalance problem; we act on it), register-distortion
 evidence (Veins 1-2, no prior art found), full reproducibility (named public dataset, exact
 scale, temporal holdout, open metrics — which none of the opaque commercial tools can
 match), and a portfolio-level audit-triage persona no competitor serves. **Lead the pitch
-with the register-manipulation finding, not the prediction.**
+with the register-distortion finding, not the prediction — framed per the language
+discipline in `analysis/VEIN1_DEFENSE.md` ("behavioral response at the threshold, a
+minority of which shows the signature of strategic reporting"), never as "the register
+is gamed."**
 
 ## 13a. Red-teaming Vein 1 (robustness + defense brief)
 

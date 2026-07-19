@@ -45,6 +45,13 @@ everyone already assumed. Where's the finding?
 **Strongest form:** you tested the one boundary you expected to work. Round-number
 heaping or SBEM lumpiness could produce apparent bunching at other points too.
 
+**First line of defense — the threshold is externally defined, not ours:** 125/126 is
+the legal E/F band boundary written into the MEES regulations before we ever touched the
+data. We did not select it to fit a pattern; the law selected it, and our hypothesis
+(pre-registered in RESEARCH_ROADMAP.md before the estimator was built) was derived from
+the regulation, not from data exploration. State this explicitly wherever the analysis
+is presented.
+
 **Defense — the boundary permutation test (`vein1_robustness_permutation.csv`):** we ran
 the *identical* estimator at every integer boundary from 70 to 140 (pooled 2018-2026).
 The **median boundary has b = 0.04** — i.e. the *typical* rating value shows no bunching
