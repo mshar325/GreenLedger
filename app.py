@@ -846,7 +846,7 @@ with tab_triage:
                 st.markdown("#### Does the model stay reliable? (conformal coverage)")
                 figc = go.Figure()
                 tcov = cov[cov.role != "calibration"]
-                figc.add_hline(y=90, line_dash="dash", line_color=MOSS_SOFT,
+                figc.add_hline(y=90, line_dash="dash", line_color=NEON,
                                 annotation_text="target 90%")
                 figc.add_trace(go.Scatter(x=cov["year"], y=cov["coverage"] * 100,
                                            mode="lines+markers", line=dict(color=CRIMSON, width=3)))
