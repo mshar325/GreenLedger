@@ -138,6 +138,53 @@ switches.to_csv(OUT_DIR / "vein2_fuel_switches.csv")
 print("\nTop fuel switches among escapes:")
 print(switches)
 
+# ---- 5. transition evidence for the app's "Pathway to E" simulator ----------------
+# Over ALL consecutive same-building pairs (any starting rating), what rating change
+# was actually observed when a given attribute changed from value A to value B? This
+# is the REAL panel evidence the simulator should cite alongside the model's re-score.
+# Convention: delta = new_rating - prev_rating; NEGATIVE = improved (lower is better).
+# Associational (co-occurring changes not controlled) -- labeled as such in the app.
+APP_DATA = ROOT / "app_data"
+
+
+def _tier(r):
+    return "Low" if r <= 50 else ("Medium" if r <= 100 else "High")
+
+
+pairs["delta"] = pairs["asset_rating"] - pairs["asset_rating_prev"]
+pairs["tier_prev"] = pairs["asset_rating_prev"].map(_tier)
+pairs["tier_new"] = pairs["asset_rating"].map(_tier)
+_order = {"Low": 0, "Medium": 1, "High": 2}
+pairs["improved_tier"] = pairs["tier_new"].map(_order) < pairs["tier_prev"].map(_order)
+
+
+def transition_table(col):
+    prev_col, cur_col = f"{col}_prev", col
+    sub = pairs[pairs[prev_col].notna() & pairs[cur_col].notna()
+                & (pairs[prev_col] != pairs[cur_col])].copy()
+    g = sub.groupby([prev_col, cur_col])
+    tab = g.agg(n=("delta", "size"), median_delta=("delta", "median"),
+                mean_delta=("delta", "mean"),
+                pct_improved_tier=("improved_tier", lambda s: 100 * s.mean())).reset_index()
+    tab = tab[tab["n"] >= 20].sort_values("n", ascending=False)
+    tab.columns = ["from", "to", "n", "median_delta", "mean_delta", "pct_improved_tier"]
+    tab["median_delta"] = tab["median_delta"].round(1)
+    tab["mean_delta"] = tab["mean_delta"].round(1)
+    tab["pct_improved_tier"] = tab["pct_improved_tier"].round(1)
+    return tab
+
+
+fuel_tab = transition_table("main_heating_fuel")
+env_tab = transition_table("building_environment")
+fuel_tab.insert(0, "attribute", "main_heating_fuel")
+env_tab.insert(0, "attribute", "building_environment")
+transitions = pd.concat([fuel_tab, env_tab], ignore_index=True)
+transitions.to_csv(APP_DATA / "vein2_transitions.csv", index=False)
+transitions.to_csv(OUT_DIR / "vein2_transitions.csv", index=False)
+print(f"\nTransition evidence: {len(transitions)} (from->to) pairs with n>=20 "
+      f"(fuel {len(fuel_tab)}, env {len(env_tab)}). Top fuel switches by n:")
+print(fuel_tab.head(8).to_string(index=False))
+
 # ---- figures ----------------------------------------------------------------------
 fig, ax = plt.subplots(figsize=(9, 4.5))
 bins = np.arange(0, 2200, 30)

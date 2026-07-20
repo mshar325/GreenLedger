@@ -274,6 +274,36 @@ def load_triage():
     return pd.read_csv(APP_DATA_DIR / "triage_2025.csv.gz", compression="gzip")
 
 
+@st.cache_data
+def load_transitions():
+    return pd.read_csv(APP_DATA_DIR / "vein2_transitions.csv")
+
+
+@st.cache_data
+def load_model_ci():
+    return pd.read_csv(APP_DATA_DIR / "model_ci.csv")
+
+
+@st.cache_data
+def load_conformal():
+    return pd.read_csv(APP_DATA_DIR / "conformal_coverage.csv")
+
+
+@st.cache_data
+def load_fairness():
+    return pd.read_csv(APP_DATA_DIR / "fairness_summary.csv")
+
+
+def transition_evidence(attribute, from_val, to_val):
+    """Real panel evidence for a specific attribute change, or None if too few cases."""
+    try:
+        t = load_transitions()
+    except FileNotFoundError:
+        return None
+    row = t[(t["attribute"] == attribute) & (t["from"] == from_val) & (t["to"] == to_val)]
+    return row.iloc[0] if len(row) else None
+
+
 def predict(record):
     X = encode_single_input(record, FEATURE_COLUMNS)
     X_use = scaler.transform(X) if scaler is not None else X.values
@@ -395,9 +425,31 @@ with tab_assess:
                            f"{abs(delta_high):.0f} points.")
             elif delta_high > 0:
                 st.error("This combination *raises* the model's High-risk probability.")
-            st.caption("Model-estimated change on register data — an association, not a "
-                       "guaranteed outcome, and not a substitute for a real assessment. "
-                       "Panel evidence on what actually moves ratings: see MEES Distortion tab.")
+            st.caption("Model-estimated change — an association, not a guaranteed outcome, "
+                       "and not a substitute for a real assessment.")
+
+            # Real panel evidence (Vein 2): what actually happened to buildings that made
+            # this exact change, from 200k+ repeat-certificate histories.
+            ev_rows = []
+            if sim_fuel != record["main_heating_fuel"]:
+                ev = transition_evidence("main_heating_fuel", record["main_heating_fuel"], sim_fuel)
+                if ev is not None:
+                    ev_rows.append(("heating fuel", record["main_heating_fuel"], sim_fuel, ev))
+            if sim_env != record["building_environment"]:
+                ev = transition_evidence("building_environment", record["building_environment"], sim_env)
+                if ev is not None:
+                    ev_rows.append(("building environment", record["building_environment"], sim_env, ev))
+            if ev_rows:
+                st.markdown("**What actually happened to real buildings that made this change**")
+                for what, frm, to, ev in ev_rows:
+                    direction = "improved" if ev["median_delta"] < 0 else "worsened"
+                    st.markdown(
+                        f"- **{what}: {frm} → {to}** — {int(ev['n']):,} real buildings did this. "
+                        f"Their rating **{direction} by a median of {abs(ev['median_delta']):.0f} points**, "
+                        f"and **{ev['pct_improved_tier']:.0f}%** moved to a better risk tier.")
+                st.caption("Real repeat-certificate evidence from the UK register (Vein 2 panel) — "
+                           "associational (other changes may co-occur), but these are actual "
+                           "before/after outcomes, not a model estimate.")
 
         # ---------------- Written report (opt-in) ----------------
         st.divider()
@@ -766,6 +818,63 @@ with tab_triage:
                     "Uncertainty", min_value=0.0, max_value=100.0, format="%.0f%%"),
             })
 
+        # ---- Vein 3: does the ranking work, and does it stay reliable under drift? ----
+        try:
+            curve = pd.read_csv(APP_DATA_DIR / "triage_curve.csv")
+            cov = load_conformal()
+        except FileNotFoundError:
+            curve = cov = None
+        if curve is not None:
+            v1, v2 = st.columns(2)
+            with v1:
+                st.markdown("#### Does uncertainty-ranking actually help?")
+                figv = go.Figure()
+                figv.add_trace(go.Scatter(
+                    x=curve["budget_frac"] * 100, y=curve["high_captured_%"],
+                    mode="lines+markers", line=dict(color=NEON, width=3), name="Uncertainty-ranked"))
+                figv.add_trace(go.Scatter(x=[0, 100], y=[0, 100], mode="lines",
+                                           line=dict(color=SLATE, dash="dash"), name="Random"))
+                figv.update_layout(**PLOTLY_DARK_LAYOUT, height=300, margin=dict(l=0, r=0, t=6, b=0),
+                                    xaxis_title="% audited", yaxis_title="% High-risk caught",
+                                    legend=dict(orientation="h", y=1.02))
+                st.plotly_chart(figv, use_container_width=True)
+                st.caption(f"At a 5% audit budget the queue finds High-risk buildings at "
+                           f"{curve[curve.budget_frac==0.05]['high_hit_rate_%'].iloc[0]:.1f}% "
+                           f"vs {curve['random_hit_rate_%'].iloc[0]:.1f}% random "
+                           f"({curve[curve.budget_frac==0.05]['lift'].iloc[0]:.1f}× lift).")
+            with v2:
+                st.markdown("#### Does the model stay reliable? (conformal coverage)")
+                figc = go.Figure()
+                tcov = cov[cov.role != "calibration"]
+                figc.add_hline(y=90, line_dash="dash", line_color=MOSS_SOFT,
+                                annotation_text="target 90%")
+                figc.add_trace(go.Scatter(x=cov["year"], y=cov["coverage"] * 100,
+                                           mode="lines+markers", line=dict(color=CRIMSON, width=3)))
+                figc.update_layout(**PLOTLY_DARK_LAYOUT, height=300, margin=dict(l=0, r=0, t=6, b=0),
+                                    xaxis_title="Test year", yaxis_title="Coverage %", showlegend=False)
+                st.plotly_chart(figc, use_container_width=True)
+                st.caption("Conformal prediction sets calibrated on 2022 for 90% coverage. "
+                           "Coverage decays year by year as the register drifts — a built-in "
+                           "expiry signal telling you when the model needs recalibration.")
+
+        # ---- Fairness disclosure ----
+        try:
+            fair = load_fairness()
+            with st.expander("⚖️ Fairness audit — who does the triage over-flag?"):
+                st.markdown(
+                    "A triage tool that allocates inspections must be checked for who it "
+                    "sends them to. On the 2025 test set:")
+                st.dataframe(fair, use_container_width=True, hide_index=True)
+                st.markdown(
+                    "**The honest finding:** the model materially **over-flags Office/Workshop "
+                    "buildings** (flagged High far above their true base rate) and they dominate "
+                    "the uncertainty queue at ~2.8× their share of the portfolio. Any real "
+                    "deployment should stratify the audit budget by building type rather than "
+                    "letting one category absorb the queue. Full audit: "
+                    "`analysis/fairness_audit.py`.")
+        except FileNotFoundError:
+            pass
+
     with st.expander("Green computing: the measured model tradeoff behind this app"):
         show_g = green_stats.rename(columns={
             "test_accuracy": "Accuracy", "test_macro_f1": "Macro F1",
@@ -773,6 +882,20 @@ with tab_triage:
             "inference_ms_per_prediction": "Inference (ms)", "model_size_kb": "Size (KB)",
         }).set_index("model")
         st.dataframe(show_g, use_container_width=True)
+        try:
+            ci = load_model_ci()
+            st.markdown("**Recall with 95% confidence intervals** (bootstrap over the 2025 "
+                        "test set; seed-spread across 5 retrainings):")
+            ci_show = ci.assign(**{
+                "High-risk recall (95% CI)": ci.apply(
+                    lambda r: f"{r.recall_high:.3f} [{r.recall_boot_lo:.3f}, {r.recall_boot_hi:.3f}]", axis=1),
+            })[["model", "High-risk recall (95% CI)"]]
+            st.dataframe(ci_show, use_container_width=True, hide_index=True)
+            st.caption("Random Forest's recall CI [0.685, 0.713] sits entirely above the ANN's "
+                       "[0.038, 0.050] and XGBoost's [0.569, 0.599] — the recall-based selection "
+                       "is statistically robust, not a one-seed artifact.")
+        except FileNotFoundError:
+            pass
         st.markdown(
             f"**{meta['winner_name']}** was selected on **High-risk recall**, not accuracy — "
             "one model here wins accuracy while catching ~4% of genuinely High-risk buildings. "

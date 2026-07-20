@@ -1,0 +1,4 @@
+property_type_group,n,base_rate_%,flag_rate_%,flag_gap_pts,precision_%,recall_%,pop_share_%,queue_share_%,queue_over_rep
+Office/Workshop,19132,14.5,53.9,39.4,23.0,85.5,35.1,99.5,2.83
+Retail/Financial/Professional,25364,4.6,8.9,4.4,19.2,37.6,46.6,0.5,0.01
+Restaurant/Cafe,9964,1.2,1.1,-0.0,20.7,20.0,18.3,0.0,0.0

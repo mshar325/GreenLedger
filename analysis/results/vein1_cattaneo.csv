@@ -1,0 +1,5 @@
+estimator,bandwidth,B_excess,M_missing,b_norm,M_over_B
+local-linear,8,5903,4917,2.3,0.83
+local-linear,10,6167,5320,2.46,0.86
+local-linear,12,6363,5661,2.58,0.89
+local-linear,15,6568,6078,2.7,0.93

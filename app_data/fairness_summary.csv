@@ -1,0 +1,5 @@
+dimension,metric,group,value
+region,largest over-flag (flag_rate - base_rate),Wales,+22.9 pts
+region,precision spread (max - min),—,7.2 pts
+business type,largest over-flag,Office/Workshop,+39.4 pts
+business type,queue over-representation (max),Office/Workshop,2.83x pop share

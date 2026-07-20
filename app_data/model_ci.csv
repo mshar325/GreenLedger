@@ -1,0 +1,5 @@
+model,recall_high,recall_boot_lo,recall_boot_hi,recall_seed_min,recall_seed_max,recall_seed_std,accuracy,acc_boot_lo,acc_boot_hi,macro_f1,f1_boot_lo,f1_boot_hi
+Logistic Regression,0.049,0.043,0.056,0.049,0.049,0.0,0.413,0.409,0.417,0.234,0.23,0.239
+Random Forest,0.699,0.685,0.713,0.633,0.699,0.0247,0.529,0.525,0.533,0.48,0.476,0.485
+XGBoost,0.584,0.569,0.599,0.584,0.584,0.0,0.547,0.543,0.551,0.493,0.489,0.498
+ANN (MLP),0.044,0.038,0.05,0.039,0.044,0.0017,0.681,0.676,0.684,0.491,0.487,0.496

@@ -1,0 +1,70 @@
+attribute,from,to,n,median_delta,mean_delta,pct_improved_tier
+main_heating_fuel,Natural Gas,Grid Supplied Electricity,31977,-22.0,-22.4,46.9
+main_heating_fuel,Grid Supplied Electricity,Natural Gas,16644,-14.0,-20.2,37.7
+main_heating_fuel,Grid Supplied Electricity,Other,4282,-44.0,-91.7,62.9
+main_heating_fuel,Other,Grid Supplied Electricity,3148,-8.0,-18.7,32.4
+main_heating_fuel,Oil,Grid Supplied Electricity,2084,-46.0,-51.5,59.6
+main_heating_fuel,Natural Gas,Other,1851,-34.0,-35.5,55.9
+main_heating_fuel,Grid Supplied Electricity,Oil,797,8.0,8.3,20.3
+main_heating_fuel,Oil,Natural Gas,787,-30.0,-35.0,49.4
+main_heating_fuel,Other,Natural Gas,713,0.0,0.3,24.8
+main_heating_fuel,Natural Gas,Oil,588,17.0,21.9,11.9
+main_heating_fuel,LPG,Grid Supplied Electricity,541,-17.0,-15.8,40.9
+main_heating_fuel,LPG,Natural Gas,381,-9.0,-11.5,26.5
+main_heating_fuel,Grid Supplied Electricity,LPG,360,-20.0,-23.7,36.7
+main_heating_fuel,Natural Gas,LPG,356,-5.5,-3.3,21.3
+main_heating_fuel,Biomass,Grid Supplied Electricity,279,11.0,12.7,16.1
+main_heating_fuel,Grid Supplied Electricity,Biomass,264,-43.0,-53.8,66.7
+main_heating_fuel,District Heating,Grid Supplied Electricity,238,-11.0,-15.4,33.2
+main_heating_fuel,Oil,Other,206,-58.5,-61.7,73.3
+main_heating_fuel,Natural Gas,Biomass,191,-37.0,-34.4,64.9
+main_heating_fuel,District Heating,Natural Gas,148,-5.0,-6.9,33.1
+main_heating_fuel,Oil,LPG,145,-22.0,-26.4,42.1
+main_heating_fuel,Natural Gas,District Heating,140,-1.5,-3.3,27.1
+main_heating_fuel,Grid Supplied Electricity,District Heating,127,-3.0,-1.7,29.9
+main_heating_fuel,Biomass,Natural Gas,111,15.0,18.4,13.5
+main_heating_fuel,Oil,Biomass,96,-68.5,-75.7,89.6
+main_heating_fuel,LPG,Oil,94,6.0,14.4,13.8
+main_heating_fuel,Other,Oil,90,37.5,50.3,6.7
+main_heating_fuel,Dual Fuel Appliances (Mineral + Wood),Grid Supplied Electricity,77,-30.0,-24.0,49.4
+main_heating_fuel,Grid Supplied Electricity,Dual Fuel Appliances (Mineral + Wood),73,-32.0,-47.0,47.9
+main_heating_fuel,LPG,Other,65,-39.0,-36.5,55.4
+main_heating_fuel,Waste Heat,Grid Supplied Electricity,57,0.0,2.5,14.0
+main_heating_fuel,Grid Supplied Electricity,Waste Heat,54,-18.5,-23.9,42.6
+main_heating_fuel,Natural Gas,Dual Fuel Appliances (Mineral + Wood),48,-10.0,-9.4,33.3
+main_heating_fuel,Biomass,Other,30,4.5,4.9,23.3
+main_heating_fuel,Biomass,Oil,26,43.5,44.7,7.7
+main_heating_fuel,Dual Fuel Appliances (Mineral + Wood),Natural Gas,25,-28.0,-21.6,44.0
+main_heating_fuel,Natural Gas,Waste Heat,25,-22.0,-26.0,60.0
+main_heating_fuel,LPG,Biomass,25,-19.0,-29.2,44.0
+main_heating_fuel,Waste Heat,Natural Gas,24,20.0,23.8,4.2
+main_heating_fuel,Biomass,LPG,23,28.0,29.8,0.0
+main_heating_fuel,Grid Supplied Electricity,Grid Displaced Electricity,23,-13.0,-29.3,26.1
+main_heating_fuel,Other,LPG,22,8.5,10.5,13.6
+building_environment,Heating and Natural Ventilation,Air Conditioning,23387,-30.0,-34.6,57.0
+building_environment,Air Conditioning,Heating and Natural Ventilation,18020,-12.0,-13.5,35.1
+building_environment,Heating and Natural Ventilation,Unconditioned,5644,-44.0,-52.2,64.4
+building_environment,Heating and Mechanical Ventilation,Heating and Natural Ventilation,4765,-15.0,-23.3,37.4
+building_environment,Heating and Natural Ventilation,Heating and Mechanical Ventilation,3703,-14.0,-17.5,37.1
+building_environment,Unconditioned,Heating and Natural Ventilation,3103,-3.0,-11.1,25.9
+building_environment,Heating and Mechanical Ventilation,Air Conditioning,2200,-19.0,-25.2,45.3
+building_environment,Air Conditioning,Heating and Mechanical Ventilation,1808,-7.0,-10.4,31.0
+building_environment,Mixed-mode with Natural Ventilation,Air Conditioning,1006,-18.0,-21.8,47.0
+building_environment,Air Conditioning,Mixed-mode with Natural Ventilation,741,-24.0,-28.8,49.0
+building_environment,Unconditioned,Air Conditioning,711,-20.0,-26.5,48.8
+building_environment,Air Conditioning,Unconditioned,563,-2.0,-7.8,28.2
+building_environment,Heating and Natural Ventilation,Mixed-mode with Natural Ventilation,555,-35.0,-39.2,60.5
+building_environment,Mixed-mode with Natural Ventilation,Heating and Natural Ventilation,536,-4.0,-5.7,29.5
+building_environment,Mixed-mode with Mechanical Ventilation,Air Conditioning,524,-13.0,-20.3,38.2
+building_environment,Air Conditioning,Mixed-mode with Mechanical Ventilation,392,-16.0,-18.1,44.9
+building_environment,Heating and Mechanical Ventilation,Unconditioned,220,-45.5,-52.3,60.5
+building_environment,Heating and Natural Ventilation,Mixed-mode with Mechanical Ventilation,172,-22.0,-23.8,45.3
+building_environment,Mixed-mode with Mechanical Ventilation,Heating and Natural Ventilation,147,-5.0,-3.7,29.3
+building_environment,Unconditioned,Heating and Mechanical Ventilation,94,3.0,4.2,27.7
+building_environment,Unconditioned,Mixed-mode with Natural Ventilation,46,-53.5,-45.2,69.6
+building_environment,Heating and Mechanical Ventilation,Mixed-mode with Natural Ventilation,43,-28.0,-41.8,53.5
+building_environment,Mixed-mode with Mechanical Ventilation,Heating and Mechanical Ventilation,41,-3.0,-5.8,26.8
+building_environment,Mixed-mode with Natural Ventilation,Heating and Mechanical Ventilation,39,-2.0,-4.0,17.9
+building_environment,Heating and Mechanical Ventilation,Mixed-mode with Mechanical Ventilation,25,-30.0,-25.8,48.0
+building_environment,Mixed-mode with Natural Ventilation,Mixed-mode with Mechanical Ventilation,25,-1.0,2.7,24.0
+building_environment,Mixed-mode with Mechanical Ventilation,Mixed-mode with Natural Ventilation,24,-8.5,-26.2,37.5

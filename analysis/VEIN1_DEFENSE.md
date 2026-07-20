@@ -147,3 +147,25 @@ panel isolates a small segment of that response that looks like measurement mani
 rather than genuine retrofit."*
 
 Every clause in that sentence is backed by a specific exhibit, and none of it overclaims.
+
+## Robustness appendix (executed 2026-07-20)
+
+Three checks now back the headline, so "it's one arbitrary specification" is answered
+with data, not assertion:
+
+1. **Specification sweep** (`vein1_bunching.py` variants): normalized excess mass b at
+   the E/F boundary stays in **[2.12, 3.50]** across polynomial degrees {3,4,5} × excluded
+   windows {±3,±5,±7}, every CI clear of zero. It does not collapse under any alternative.
+
+2. **Boundary permutation** (`vein1_bunching.py`, all-boundary run): running the identical
+   estimator at every integer boundary shows a median boundary b ≈ 0.04; **125 exceeds
+   ~98% of all placebo boundaries**. 125 is not one interesting point among many.
+
+3. **Local-linear (Cattaneo-spirit) estimator** (`vein1_cattaneo.py`): rebuilding the
+   counterfactual *locally* — a weighted local-linear trend just outside the excluded
+   window instead of a global polynomial — gives **b = 2.30–2.70 across bandwidths
+   {8,10,12,15}**, with M/B = 0.83–0.93. The finding survives a fundamentally different
+   estimator, so it is not an artifact of the global polynomial's shape.
+
+Still on the honest to-do list: a full `rddensity` implementation with its own analytic
+SEs, and a multi-seed permutation-inference p-value for the boundary test.

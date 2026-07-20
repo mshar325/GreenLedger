@@ -92,3 +92,31 @@ common observable channel overall is assessed-floor-area revision, a lever that
 requires no physical work. Together: the bunching is real, mostly built out of
 substantive responses, with a thin, identifiable layer that looks like measurement
 gaming — and the floor-area channel is the specific audit-worthy margin.
+
+## Building fixed-effects (within) regression — added 2026-07-20
+
+The descriptive profile above co-occurs changes without controlling for the building.
+A building fixed-effects OLS (`analysis/vein2_causal.py`) removes all time-invariant
+cross-building confounding: rating and predictors are de-meaned within each building,
+year fixed effects are absorbed, and standard errors are clustered by building.
+n = 521,060 building-certificates across ~213k buildings with 2+ certs.
+
+Within-building coefficients on the rating (lower = better), relative to the omitted
+lower-carbon fuel mix (biomass/district heating/waste heat):
+
+| Predictor | Coef | 95% CI | p |
+|---|---|---|---|
+| Oil heating | **+46.5** | [32.8, 60.1] | <0.001 |
+| Grid electricity | +21.6 | [4.0, 39.2] | 0.016 |
+| Natural gas | +20.8 | [4.9, 36.6] | 0.010 |
+| Has air conditioning | −8.7 | [−14.4, −2.9] | 0.003 |
+| log(floor area) | −1.3 | [−3.9, 1.3] | 0.318 (ns) |
+
+**Reading it.** Holding the building fixed and absorbing the year trend, heating fuel
+moves the rating substantially — oil is ~47 points worse than the low-carbon baseline,
+and ~25 points worse than electricity, consistent with (and cleaner than) the raw
+transition table. This is the causal-flavored version of "what moves ratings": it is
+still observational (unmeasured concurrent works remain), but every fixed building
+characteristic is differenced out. Floor area is not significant within-building here —
+notable given it was the most common *observable* channel in escapes, suggesting its
+role there is as a re-measurement lever at the threshold rather than a general driver.
